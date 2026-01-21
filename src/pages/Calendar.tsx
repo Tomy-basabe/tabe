@@ -1,16 +1,11 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCalendarEvents, CalendarEvent, EventType } from "@/hooks/useCalendarEvents";
+import { useSubjects } from "@/hooks/useSubjects";
+import { AddEventModal } from "@/components/calendar/AddEventModal";
 
-interface CalendarEvent {
-  id: string;
-  title: string;
-  date: Date;
-  type: "P1" | "P2" | "Global" | "Recuperatorio" | "Final" | "Estudio";
-  subject?: string;
-}
-
-const eventTypeColors = {
+const eventTypeColors: Record<EventType, string> = {
   P1: "bg-neon-cyan/20 border-neon-cyan text-neon-cyan",
   P2: "bg-neon-purple/20 border-neon-purple text-neon-purple",
   Global: "bg-neon-gold/20 border-neon-gold text-neon-gold",
@@ -19,15 +14,6 @@ const eventTypeColors = {
   Estudio: "bg-secondary border-muted-foreground text-muted-foreground",
 };
 
-// Mock events
-const mockEvents: CalendarEvent[] = [
-  { id: "1", title: "Parcial 2 - Física I", date: new Date(2025, 0, 22), type: "P2", subject: "Física I" },
-  { id: "2", title: "Parcial 1 - Programación II", date: new Date(2025, 0, 24), type: "P1", subject: "Programación II" },
-  { id: "3", title: "Final - Análisis Matemático I", date: new Date(2025, 0, 28), type: "Final", subject: "Análisis Matemático I" },
-  { id: "4", title: "Sesión de estudio", date: new Date(2025, 0, 20), type: "Estudio" },
-  { id: "5", title: "Global - Álgebra", date: new Date(2025, 0, 30), type: "Global", subject: "Álgebra" },
-];
-
 const daysOfWeek = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const months = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -35,8 +21,12 @@ const months = [
 ];
 
 export default function Calendar() {
+  const { events, loading, createEvent, deleteEvent, getEventsForDate } = useCalendarEvents();
+  const { rawSubjects } = useSubjects();
+  
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -55,17 +45,9 @@ export default function Calendar() {
   };
 
   const goToToday = () => {
-    setCurrentDate(new Date());
-    setSelectedDate(new Date());
-  };
-
-  const getEventsForDate = (date: Date) => {
-    return mockEvents.filter(
-      (event) =>
-        event.date.getDate() === date.getDate() &&
-        event.date.getMonth() === date.getMonth() &&
-        event.date.getFullYear() === date.getFullYear()
-    );
+    const today = new Date();
+    setCurrentDate(today);
+    setSelectedDate(today);
   };
 
   const isToday = (date: Date) => {
@@ -86,6 +68,16 @@ export default function Calendar() {
     );
   };
 
+  const handleAddEvent = () => {
+    setShowAddModal(true);
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (confirm("¿Eliminar este evento?")) {
+      await deleteEvent(eventId);
+    }
+  };
+
   const renderCalendarDays = () => {
     const days = [];
     
@@ -97,7 +89,7 @@ export default function Calendar() {
     // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
-      const events = getEventsForDate(date);
+      const dayEvents = getEventsForDate(date);
       const today = isToday(date);
       const selected = isSelected(date);
 
@@ -125,19 +117,19 @@ export default function Calendar() {
             <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary animate-pulse" />
           )}
           <div className="mt-1 space-y-1 overflow-hidden">
-            {events.slice(0, 2).map((event) => (
+            {dayEvents.slice(0, 2).map((event) => (
               <div
                 key={event.id}
                 className={cn(
                   "text-xs px-1.5 py-0.5 rounded border truncate",
-                  eventTypeColors[event.type]
+                  eventTypeColors[event.tipo_examen]
                 )}
               >
-                {event.title}
+                {event.titulo}
               </div>
             ))}
-            {events.length > 2 && (
-              <p className="text-xs text-muted-foreground">+{events.length - 2} más</p>
+            {dayEvents.length > 2 && (
+              <p className="text-xs text-muted-foreground">+{dayEvents.length - 2} más</p>
             )}
           </div>
         </button>
@@ -148,6 +140,17 @@ export default function Calendar() {
   };
 
   const selectedDateEvents = selectedDate ? getEventsForDate(selectedDate) : [];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-12 h-12 animate-spin text-primary" />
+          <p className="text-muted-foreground">Cargando calendario...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -168,7 +171,10 @@ export default function Calendar() {
           >
             Hoy
           </button>
-          <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2">
+          <button 
+            onClick={handleAddEvent}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+          >
             <Plus className="w-4 h-4" />
             Nuevo Evento
           </button>
@@ -218,7 +224,7 @@ export default function Calendar() {
         <div className="card-gamer rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <CalendarIcon className="w-5 h-5 text-primary" />
-            <h3 className="font-display font-semibold">
+            <h3 className="font-display font-semibold text-sm">
               {selectedDate
                 ? selectedDate.toLocaleDateString("es-AR", {
                     weekday: "long",
@@ -233,7 +239,10 @@ export default function Calendar() {
             <div className="text-center py-8 text-muted-foreground">
               <CalendarIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p className="text-sm">No hay eventos para este día</p>
-              <button className="mt-4 px-4 py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors">
+              <button 
+                onClick={handleAddEvent}
+                className="mt-4 px-4 py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors"
+              >
                 Agregar evento
               </button>
             </div>
@@ -245,16 +254,35 @@ export default function Calendar() {
                 <div
                   key={event.id}
                   className={cn(
-                    "p-3 rounded-lg border",
-                    eventTypeColors[event.type]
+                    "p-3 rounded-lg border relative group",
+                    eventTypeColors[event.tipo_examen]
                   )}
                 >
-                  <p className="font-medium text-sm">{event.title}</p>
-                  {event.subject && (
-                    <p className="text-xs opacity-80 mt-1">{event.subject}</p>
+                  <button
+                    onClick={() => handleDeleteEvent(event.id)}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-background/20"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                  <p className="font-medium text-sm pr-6">{event.titulo}</p>
+                  {event.hora && (
+                    <p className="text-xs opacity-80 mt-1">{event.hora}</p>
+                  )}
+                  {event.subject_nombre && (
+                    <p className="text-xs opacity-80 mt-1">{event.subject_nombre}</p>
+                  )}
+                  {event.notas && (
+                    <p className="text-xs opacity-70 mt-2 italic">{event.notas}</p>
                   )}
                 </div>
               ))}
+              <button 
+                onClick={handleAddEvent}
+                className="w-full py-2 bg-secondary rounded-lg text-sm font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Agregar otro
+              </button>
             </div>
           )}
 
@@ -272,6 +300,15 @@ export default function Calendar() {
           </div>
         </div>
       </div>
+
+      {/* Add Event Modal */}
+      <AddEventModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSubmit={createEvent}
+        subjects={rawSubjects}
+        initialDate={selectedDate || undefined}
+      />
     </div>
   );
 }

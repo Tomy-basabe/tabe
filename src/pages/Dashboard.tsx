@@ -5,6 +5,7 @@ import { SubjectCard } from "@/components/dashboard/SubjectCard";
 import { UpcomingExams } from "@/components/dashboard/UpcomingExams";
 import { StudyStreak } from "@/components/dashboard/StudyStreak";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
 
@@ -21,12 +22,29 @@ export default function Dashboard() {
     yearProgress,
     recentSubjects,
   } = useDashboardStats();
+  
+  const { getUpcomingExams, loading: eventsLoading } = useCalendarEvents();
 
   // Get user display name
   const userName = user?.user_metadata?.nombre || user?.email?.split('@')[0] || "Estudiante";
 
-  // Mock exams for now (can be connected to calendar_events later)
-  const mockExams: { id: string; subject: string; type: "P1" | "P2" | "Final"; date: Date; daysLeft: number }[] = [];
+  // Get upcoming exams from calendar events
+  const upcomingEvents = getUpcomingExams(5);
+  const upcomingExams = upcomingEvents.map(event => {
+    const eventDate = new Date(event.fecha);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffTime = eventDate.getTime() - today.getTime();
+    const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return {
+      id: event.id,
+      subject: event.subject_nombre || event.titulo,
+      type: event.tipo_examen as "P1" | "P2" | "Global" | "Recuperatorio" | "Final",
+      date: eventDate,
+      daysLeft: Math.max(0, daysLeft),
+    };
+  });
 
   if (loading) {
     return (
@@ -185,7 +203,7 @@ export default function Dashboard() {
         </div>
 
         {/* Upcoming Exams */}
-        <UpcomingExams exams={mockExams} />
+        <UpcomingExams exams={upcomingExams} />
       </div>
     </div>
   );
