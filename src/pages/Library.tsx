@@ -103,9 +103,24 @@ export default function Library() {
       if (file.type === "application/pdf") tipo = "pdf";
       else if (file.type.startsWith("image/")) tipo = "imagen";
 
-      // For now, we'll create a local object URL (in production, use Supabase Storage)
-      const objectUrl = URL.createObjectURL(file);
+      // Generate unique file path
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
 
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('library-files')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('library-files')
+        .getPublicUrl(filePath);
+
+      // Save file reference in database
       const { error } = await supabase
         .from("library_files")
         .insert({
@@ -113,7 +128,8 @@ export default function Library() {
           subject_id: uploadSubject,
           nombre: file.name,
           tipo,
-          url: objectUrl,
+          url: urlData.publicUrl,
+          storage_path: filePath,
           tamaño_bytes: file.size,
         });
 
@@ -128,6 +144,10 @@ export default function Library() {
       toast.error("Error al subir el archivo");
     } finally {
       setUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -159,17 +179,32 @@ export default function Library() {
     }
   };
 
-  const deleteFile = async (id: string) => {
-    const { error } = await supabase
-      .from("library_files")
-      .delete()
-      .eq("id", id);
+  const deleteFile = async (file: LibraryFile) => {
+    try {
+      // Delete from storage if it has a storage path
+      if (file.storage_path) {
+        const { error: storageError } = await supabase.storage
+          .from('library-files')
+          .remove([file.storage_path]);
+        
+        if (storageError) {
+          console.error("Error deleting from storage:", storageError);
+        }
+      }
 
-    if (error) {
-      toast.error("Error al eliminar el archivo");
-    } else {
+      // Delete from database
+      const { error } = await supabase
+        .from("library_files")
+        .delete()
+        .eq("id", file.id);
+
+      if (error) throw error;
+
       toast.success("Archivo eliminado");
       fetchFiles();
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      toast.error("Error al eliminar el archivo");
     }
   };
 
@@ -342,8 +377,8 @@ export default function Library() {
                     <ExternalLink className="w-4 h-4" />
                   </a>
                   <button
-                    onClick={() => deleteFile(file.id)}
-                    className="p-2 bg-neon-red/20 text-neon-red rounded-lg hover:bg-neon-red/30"
+                    onClick={() => deleteFile(file)}
+                    className="p-2 bg-destructive/20 text-destructive rounded-lg hover:bg-destructive/30"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
