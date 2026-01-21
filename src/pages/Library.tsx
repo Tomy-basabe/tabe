@@ -3,11 +3,21 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   FileText, Image, Link as LinkIcon, Upload, Plus, 
-  Trash2, ExternalLink, Download, Filter, FolderOpen 
+  Trash2, ExternalLink, FolderOpen, Folder, FolderPlus,
+  ChevronRight, ArrowLeft, X, Eye
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+interface LibraryFolder {
+  id: string;
+  nombre: string;
+  color: string;
+  subject_id: string | null;
+  parent_folder_id: string | null;
+  created_at: string;
+}
 
 interface LibraryFile {
   id: string;
@@ -17,6 +27,7 @@ interface LibraryFile {
   storage_path: string | null;
   tamaño_bytes: number | null;
   subject_id: string | null;
+  folder_id: string | null;
   created_at: string;
   subject?: { nombre: string; codigo: string; año: number };
 }
@@ -37,25 +48,39 @@ const fileTypeIcons = {
 };
 
 const fileTypeColors = {
-  pdf: "text-neon-red bg-neon-red/20",
+  pdf: "text-destructive bg-destructive/20",
   imagen: "text-neon-green bg-neon-green/20",
   link: "text-neon-cyan bg-neon-cyan/20",
   video: "text-neon-purple bg-neon-purple/20",
   otro: "text-muted-foreground bg-secondary",
 };
 
+const folderColors = [
+  { name: "Cyan", value: "#00d9ff" },
+  { name: "Purple", value: "#a855f7" },
+  { name: "Green", value: "#22c55e" },
+  { name: "Gold", value: "#fbbf24" },
+  { name: "Red", value: "#ef4444" },
+];
+
 export default function Library() {
   const { user } = useAuth();
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [files, setFiles] = useState<LibraryFile[]>([]);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [folderPath, setFolderPath] = useState<LibraryFolder[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewFile, setPreviewFile] = useState<LibraryFile | null>(null);
   const [uploadSubject, setUploadSubject] = useState<string>("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkName, setLinkName] = useState("");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderColor, setNewFolderColor] = useState("#00d9ff");
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +88,7 @@ export default function Library() {
   useEffect(() => {
     if (user) {
       fetchSubjects();
+      fetchFolders();
       fetchFiles();
     }
   }, [user]);
@@ -75,6 +101,17 @@ export default function Library() {
     
     if (!error && data) {
       setSubjects(data);
+    }
+  };
+
+  const fetchFolders = async () => {
+    const { data, error } = await supabase
+      .from("library_folders")
+      .select("*")
+      .order("nombre", { ascending: true });
+    
+    if (!error && data) {
+      setFolders(data as LibraryFolder[]);
     }
   };
 
@@ -92,40 +129,98 @@ export default function Library() {
     setLoading(false);
   };
 
+  const navigateToFolder = (folderId: string | null) => {
+    setCurrentFolderId(folderId);
+    if (folderId === null) {
+      setFolderPath([]);
+    } else {
+      const folder = folders.find(f => f.id === folderId);
+      if (folder) {
+        // Build path from root to current folder
+        const path: LibraryFolder[] = [];
+        let current: LibraryFolder | undefined = folder;
+        while (current) {
+          path.unshift(current);
+          current = folders.find(f => f.id === current?.parent_folder_id);
+        }
+        setFolderPath(path);
+      }
+    }
+  };
+
+  const createFolder = async () => {
+    if (!user || !newFolderName.trim()) return;
+
+    try {
+      const { error } = await supabase
+        .from("library_folders")
+        .insert({
+          user_id: user.id,
+          nombre: newFolderName.trim(),
+          color: newFolderColor,
+          parent_folder_id: currentFolderId,
+        });
+
+      if (error) throw error;
+
+      toast.success("¡Carpeta creada!");
+      setNewFolderName("");
+      setShowFolderModal(false);
+      fetchFolders();
+    } catch (error) {
+      console.error("Error creating folder:", error);
+      toast.error("Error al crear la carpeta");
+    }
+  };
+
+  const deleteFolder = async (folderId: string) => {
+    try {
+      const { error } = await supabase
+        .from("library_folders")
+        .delete()
+        .eq("id", folderId);
+
+      if (error) throw error;
+
+      toast.success("Carpeta eliminada");
+      fetchFolders();
+      fetchFiles();
+    } catch (error) {
+      console.error("Error deleting folder:", error);
+      toast.error("Error al eliminar la carpeta");
+    }
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user || !uploadSubject) return;
+    if (!file || !user) return;
 
     setUploading(true);
     try {
-      // Determine file type
       let tipo: "pdf" | "imagen" | "otro" = "otro";
       if (file.type === "application/pdf") tipo = "pdf";
       else if (file.type.startsWith("image/")) tipo = "imagen";
 
-      // Generate unique file path
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('library-files')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from('library-files')
         .getPublicUrl(filePath);
 
-      // Save file reference in database
       const { error } = await supabase
         .from("library_files")
         .insert({
           user_id: user.id,
-          subject_id: uploadSubject,
+          subject_id: uploadSubject || null,
+          folder_id: currentFolderId,
           nombre: file.name,
           tipo,
           url: urlData.publicUrl,
@@ -135,7 +230,7 @@ export default function Library() {
 
       if (error) throw error;
 
-      toast.success("¡Archivo subido exitosamente!");
+      toast.success("¡Archivo subido!");
       fetchFiles();
       setShowUploadModal(false);
       setUploadSubject("");
@@ -144,22 +239,20 @@ export default function Library() {
       toast.error("Error al subir el archivo");
     } finally {
       setUploading(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const addLink = async () => {
-    if (!user || !uploadSubject || !linkUrl.trim() || !linkName.trim()) return;
+    if (!user || !linkUrl.trim() || !linkName.trim()) return;
 
     try {
       const { error } = await supabase
         .from("library_files")
         .insert({
           user_id: user.id,
-          subject_id: uploadSubject,
+          subject_id: uploadSubject || null,
+          folder_id: currentFolderId,
           nombre: linkName.trim(),
           tipo: "link",
           url: linkUrl.trim(),
@@ -167,7 +260,7 @@ export default function Library() {
 
       if (error) throw error;
 
-      toast.success("¡Link agregado exitosamente!");
+      toast.success("¡Link agregado!");
       fetchFiles();
       setShowLinkModal(false);
       setUploadSubject("");
@@ -181,18 +274,10 @@ export default function Library() {
 
   const deleteFile = async (file: LibraryFile) => {
     try {
-      // Delete from storage if it has a storage path
       if (file.storage_path) {
-        const { error: storageError } = await supabase.storage
-          .from('library-files')
-          .remove([file.storage_path]);
-        
-        if (storageError) {
-          console.error("Error deleting from storage:", storageError);
-        }
+        await supabase.storage.from('library-files').remove([file.storage_path]);
       }
 
-      // Delete from database
       const { error } = await supabase
         .from("library_files")
         .delete()
@@ -208,6 +293,11 @@ export default function Library() {
     }
   };
 
+  const openPreview = (file: LibraryFile) => {
+    setPreviewFile(file);
+    setShowPreviewModal(true);
+  };
+
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return "N/A";
     if (bytes < 1024) return `${bytes} B`;
@@ -215,12 +305,9 @@ export default function Library() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const filteredFiles = files.filter(file => {
-    const matchesYear = !selectedYear || file.subject?.año === selectedYear;
-    const matchesSubject = !selectedSubject || file.subject_id === selectedSubject;
-    const matchesType = !selectedType || file.tipo === selectedType;
-    return matchesYear && matchesSubject && matchesType;
-  });
+  // Get current folder contents
+  const currentFolders = folders.filter(f => f.parent_folder_id === currentFolderId);
+  const currentFiles = files.filter(f => f.folder_id === currentFolderId);
 
   const filteredSubjects = subjects.filter(s => !selectedYear || s.año === selectedYear);
 
@@ -233,10 +320,17 @@ export default function Library() {
             Biblioteca
           </h1>
           <p className="text-muted-foreground mt-1">
-            Todos tus recursos de estudio en un solo lugar
+            Organiza tus recursos de estudio
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setShowFolderModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg font-medium hover:bg-secondary/80 transition-colors"
+          >
+            <FolderPlus className="w-4 h-4" />
+            Nueva Carpeta
+          </button>
           <button
             onClick={() => setShowLinkModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg font-medium hover:bg-secondary/80 transition-colors"
@@ -254,72 +348,49 @@ export default function Library() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4">
-        {/* Year Filter */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => { setSelectedYear(null); setSelectedSubject(null); }}
-            className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-all",
-              !selectedYear ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-secondary/80"
-            )}
-          >
-            Todos
-          </button>
-          {[1, 2, 3, 4, 5].map(year => (
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm">
+        <button
+          onClick={() => navigateToFolder(null)}
+          className={cn(
+            "flex items-center gap-1 hover:text-primary transition-colors",
+            currentFolderId === null ? "text-primary font-medium" : "text-muted-foreground"
+          )}
+        >
+          <FolderOpen className="w-4 h-4" />
+          Biblioteca
+        </button>
+        {folderPath.map((folder, index) => (
+          <div key={folder.id} className="flex items-center gap-2">
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
             <button
-              key={year}
-              onClick={() => { setSelectedYear(year); setSelectedSubject(null); }}
+              onClick={() => navigateToFolder(folder.id)}
               className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                selectedYear === year ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-secondary/80"
+                "hover:text-primary transition-colors",
+                index === folderPath.length - 1 ? "text-primary font-medium" : "text-muted-foreground"
               )}
             >
-              Año {year}
+              {folder.nombre}
             </button>
-          ))}
-        </div>
-
-        {/* Subject Filter */}
-        {selectedYear && (
-          <select
-            value={selectedSubject || ""}
-            onChange={(e) => setSelectedSubject(e.target.value || null)}
-            className="px-4 py-2 bg-secondary rounded-lg text-sm border border-border"
-          >
-            <option value="">Todas las materias</option>
-            {filteredSubjects.map(subject => (
-              <option key={subject.id} value={subject.id}>
-                {subject.nombre}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {/* Type Filter */}
-        <div className="flex gap-2">
-          {["pdf", "imagen", "link"].map(type => (
-            <button
-              key={type}
-              onClick={() => setSelectedType(selectedType === type ? null : type)}
-              className={cn(
-                "px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
-                selectedType === type 
-                  ? fileTypeColors[type as keyof typeof fileTypeColors]
-                  : "bg-secondary hover:bg-secondary/80"
-              )}
-            >
-              {type === "pdf" && <FileText className="w-4 h-4" />}
-              {type === "imagen" && <Image className="w-4 h-4" />}
-              {type === "link" && <LinkIcon className="w-4 h-4" />}
-              {type.charAt(0).toUpperCase() + type.slice(1)}
-            </button>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
 
-      {/* Files Grid */}
+      {/* Back button when in subfolder */}
+      {currentFolderId && (
+        <button
+          onClick={() => {
+            const parentId = folderPath.length > 1 ? folderPath[folderPath.length - 2].id : null;
+            navigateToFolder(parentId);
+          }}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Volver
+        </button>
+      )}
+
+      {/* Content Grid */}
       {loading ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => (
@@ -330,44 +401,111 @@ export default function Library() {
             </div>
           ))}
         </div>
-      ) : filteredFiles.length === 0 ? (
+      ) : currentFolders.length === 0 && currentFiles.length === 0 ? (
         <div className="text-center py-16">
           <FolderOpen className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <p className="text-muted-foreground mb-4">No hay archivos en tu biblioteca</p>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium"
-          >
-            Subir primer archivo
-          </button>
+          <p className="text-muted-foreground mb-4">
+            {currentFolderId ? "Esta carpeta está vacía" : "No hay archivos en tu biblioteca"}
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => setShowFolderModal(true)}
+              className="px-4 py-2 bg-secondary rounded-lg font-medium"
+            >
+              Crear carpeta
+            </button>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium"
+            >
+              Subir archivo
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredFiles.map(file => {
+          {/* Folders */}
+          {currentFolders.map(folder => (
+            <div
+              key={folder.id}
+              onClick={() => navigateToFolder(folder.id)}
+              className="card-gamer rounded-xl p-4 cursor-pointer hover:border-primary/50 transition-all group relative"
+            >
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-12 h-12 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `${folder.color}20` }}
+                >
+                  <Folder className="w-6 h-6" style={{ color: folder.color }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium truncate">{folder.nombre}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {files.filter(f => f.folder_id === folder.id).length} archivos
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                onClick={(e) => { e.stopPropagation(); deleteFolder(folder.id); }}
+                className="absolute top-2 right-2 p-2 bg-destructive/20 text-destructive rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/30"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+
+          {/* Files */}
+          {currentFiles.map(file => {
             const Icon = fileTypeIcons[file.tipo];
             const colors = fileTypeColors[file.tipo];
+            const canPreview = file.tipo === "pdf" || file.tipo === "imagen";
 
             return (
               <div key={file.id} className="card-gamer rounded-xl p-4 group relative">
-                <div className="flex items-start gap-3 mb-3">
-                  <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", colors)}>
-                    <Icon className="w-5 h-5" />
+                {/* Preview thumbnail for images */}
+                {file.tipo === "imagen" && (
+                  <div 
+                    className="w-full h-32 rounded-lg mb-3 bg-cover bg-center cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ backgroundImage: `url(${file.url})` }}
+                    onClick={() => openPreview(file)}
+                  />
+                )}
+                
+                {/* PDF icon or other files */}
+                {file.tipo !== "imagen" && (
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", colors)}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-sm truncate">{file.nombre}</h3>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {file.subject?.nombre || "Sin materia"}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm truncate">{file.nombre}</h3>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {file.subject?.nombre || "Sin materia"}
-                    </p>
-                  </div>
-                </div>
+                )}
+
+                {file.tipo === "imagen" && (
+                  <h3 className="font-medium text-sm truncate mb-1">{file.nombre}</h3>
+                )}
 
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Año {file.subject?.año}</span>
+                  <span>{file.subject?.nombre || "Sin materia"}</span>
                   <span>{formatFileSize(file.tamaño_bytes)}</span>
                 </div>
 
                 {/* Actions */}
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                  {canPreview && (
+                    <button
+                      onClick={() => openPreview(file)}
+                      className="p-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  )}
                   <a
                     href={file.url}
                     target="_blank"
@@ -389,6 +527,98 @@ export default function Library() {
         </div>
       )}
 
+      {/* Preview Modal */}
+      <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
+        <DialogContent className="max-w-4xl h-[85vh] p-0 overflow-hidden bg-card border-border">
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="font-medium truncate">{previewFile?.nombre}</h3>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewFile?.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 bg-secondary rounded-lg hover:bg-secondary/80"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="p-2 bg-secondary rounded-lg hover:bg-secondary/80"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              {previewFile?.tipo === "imagen" && (
+                <img 
+                  src={previewFile.url} 
+                  alt={previewFile.nombre} 
+                  className="max-w-full h-auto mx-auto rounded-lg"
+                />
+              )}
+              {previewFile?.tipo === "pdf" && (
+                <iframe
+                  src={`${previewFile.url}#toolbar=0`}
+                  className="w-full h-full rounded-lg"
+                  title={previewFile.nombre}
+                />
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Folder Modal */}
+      <Dialog open={showFolderModal} onOpenChange={setShowFolderModal}>
+        <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="font-display gradient-text flex items-center gap-2">
+              <FolderPlus className="w-5 h-5 text-primary" />
+              Nueva Carpeta
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Nombre</label>
+              <input
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="Nombre de la carpeta"
+                className="w-full mt-2 px-4 py-3 bg-secondary rounded-xl border border-border"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Color</label>
+              <div className="flex gap-2 mt-2">
+                {folderColors.map(color => (
+                  <button
+                    key={color.value}
+                    onClick={() => setNewFolderColor(color.value)}
+                    className={cn(
+                      "w-10 h-10 rounded-xl transition-all",
+                      newFolderColor === color.value && "ring-2 ring-offset-2 ring-offset-background ring-primary"
+                    )}
+                    style={{ backgroundColor: color.value }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={createFolder}
+              disabled={!newFolderName.trim()}
+              className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold disabled:opacity-50 transition-all"
+            >
+              Crear Carpeta
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Upload Modal */}
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
         <DialogContent className="sm:max-w-md bg-card border-border">
@@ -397,56 +627,31 @@ export default function Library() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Año</label>
-              <div className="flex gap-2 mt-2">
-                {[1, 2, 3, 4, 5].map(year => (
-                  <button
-                    key={year}
-                    onClick={() => { setSelectedYear(year); setUploadSubject(""); }}
-                    className={cn(
-                      "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
-                      selectedYear === year ? "bg-primary text-primary-foreground" : "bg-secondary"
-                    )}
-                  >
-                    {year}°
-                  </button>
+              <label className="text-sm font-medium text-muted-foreground">Materia (opcional)</label>
+              <select
+                value={uploadSubject}
+                onChange={(e) => setUploadSubject(e.target.value)}
+                className="w-full mt-2 px-4 py-3 bg-secondary rounded-xl border border-border"
+              >
+                <option value="">Sin materia asignada</option>
+                {subjects.map(subject => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.nombre} (Año {subject.año})
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
 
-            {selectedYear && (
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Materia</label>
-                <select
-                  value={uploadSubject}
-                  onChange={(e) => setUploadSubject(e.target.value)}
-                  className="w-full mt-2 px-4 py-3 bg-secondary rounded-xl border border-border"
-                >
-                  <option value="">Seleccionar materia</option>
-                  {filteredSubjects.map(subject => (
-                    <option key={subject.id} value={subject.id}>
-                      {subject.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             <div
-              onClick={() => uploadSubject && fileInputRef.current?.click()}
-              className={cn(
-                "border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer",
-                uploadSubject
-                  ? "border-primary/50 hover:border-primary bg-primary/5"
-                  : "border-border opacity-50 cursor-not-allowed"
-              )}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-primary/50 hover:border-primary bg-primary/5 rounded-xl p-8 text-center transition-colors cursor-pointer"
             >
               <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
               <p className="text-sm font-medium">
                 {uploading ? "Subiendo..." : "Click para seleccionar archivo"}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                PDF, imágenes (máx 10MB)
+                PDF, imágenes (máx 20MB)
               </p>
               <input
                 ref={fileInputRef}
@@ -454,7 +659,7 @@ export default function Library() {
                 accept=".pdf,image/*"
                 onChange={handleFileUpload}
                 className="hidden"
-                disabled={!uploadSubject || uploading}
+                disabled={uploading}
               />
             </div>
           </div>
@@ -469,40 +674,20 @@ export default function Library() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Año</label>
-              <div className="flex gap-2 mt-2">
-                {[1, 2, 3, 4, 5].map(year => (
-                  <button
-                    key={year}
-                    onClick={() => { setSelectedYear(year); setUploadSubject(""); }}
-                    className={cn(
-                      "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
-                      selectedYear === year ? "bg-primary text-primary-foreground" : "bg-secondary"
-                    )}
-                  >
-                    {year}°
-                  </button>
+              <label className="text-sm font-medium text-muted-foreground">Materia (opcional)</label>
+              <select
+                value={uploadSubject}
+                onChange={(e) => setUploadSubject(e.target.value)}
+                className="w-full mt-2 px-4 py-3 bg-secondary rounded-xl border border-border"
+              >
+                <option value="">Sin materia asignada</option>
+                {subjects.map(subject => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.nombre} (Año {subject.año})
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
-
-            {selectedYear && (
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Materia</label>
-                <select
-                  value={uploadSubject}
-                  onChange={(e) => setUploadSubject(e.target.value)}
-                  className="w-full mt-2 px-4 py-3 bg-secondary rounded-xl border border-border"
-                >
-                  <option value="">Seleccionar materia</option>
-                  {filteredSubjects.map(subject => (
-                    <option key={subject.id} value={subject.id}>
-                      {subject.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
 
             <div>
               <label className="text-sm font-medium text-muted-foreground">Nombre del recurso</label>
@@ -528,8 +713,8 @@ export default function Library() {
 
             <button
               onClick={addLink}
-              disabled={!uploadSubject || !linkUrl.trim() || !linkName.trim()}
-              className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50"
+              disabled={!linkUrl.trim() || !linkName.trim()}
+              className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold disabled:opacity-50 transition-all"
             >
               Agregar Link
             </button>
