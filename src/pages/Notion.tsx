@@ -17,6 +17,7 @@ import { PDFExporter } from "@/components/notion/PDFExporter";
 import { useNotionDocuments, NotionDocument } from "@/hooks/useNotionDocuments";
 import { useAchievements } from "@/hooks/useAchievements";
 import { OutputData } from "@editorjs/editorjs";
+import { notionTemplates, NotionTemplate } from "@/lib/notionTemplates";
 
 interface Subject {
   id: string;
@@ -40,6 +41,8 @@ export default function Notion() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [editorContent, setEditorContent] = useState<OutputData | null>(null);
+  const [localTitle, setLocalTitle] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState<NotionTemplate>(notionTemplates[0]);
   
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedContentRef = useRef<string>("");
@@ -82,33 +85,45 @@ export default function Notion() {
     setEditorContent(content);
   }, [activeDocument]);
 
-  // Check if there are unsaved changes
+  // Check if there are unsaved changes (content or title)
   const hasUnsavedChanges = useCallback(() => {
+    if (!activeDocument) return false;
     const currentContent = JSON.stringify(editorContent);
-    return currentContent !== lastSavedContentRef.current;
-  }, [editorContent]);
+    const contentChanged = currentContent !== lastSavedContentRef.current;
+    const titleChanged = localTitle !== activeDocument.titulo;
+    return contentChanged || titleChanged;
+  }, [editorContent, localTitle, activeDocument]);
 
-  // Manual save function
+  // Manual save function (saves content and title)
   const handleManualSave = useCallback(async () => {
-    if (!activeDocument || !editorContent) return;
+    if (!activeDocument) return;
     
     setIsSaving(true);
     try {
-      await updateDocument(activeDocument.id, { contenido: editorContent });
+      const updates: { contenido?: OutputData; titulo?: string } = {};
+      
+      if (editorContent) {
+        updates.contenido = editorContent;
+      }
+      if (localTitle !== activeDocument.titulo) {
+        updates.titulo = localTitle;
+      }
+      
+      await updateDocument(activeDocument.id, updates);
       lastSavedContentRef.current = JSON.stringify(editorContent);
+      setActiveDocument(prev => prev ? { ...prev, titulo: localTitle } : null);
       toast.success("Apunte guardado");
     } catch (error) {
       toast.error("Error al guardar");
     } finally {
       setIsSaving(false);
     }
-  }, [activeDocument, editorContent, updateDocument]);
+  }, [activeDocument, editorContent, localTitle, updateDocument]);
 
-  const handleTitleUpdate = useCallback(async (title: string) => {
-    if (!activeDocument) return;
-    await updateDocument(activeDocument.id, { titulo: title });
-    setActiveDocument(prev => prev ? { ...prev, titulo: title } : null);
-  }, [activeDocument, updateDocument]);
+  // Update local title only (no DB save on each keystroke)
+  const handleTitleChange = useCallback((title: string) => {
+    setLocalTitle(title);
+  }, []);
 
   const handleEmojiUpdate = useCallback(async (emoji: string) => {
     if (!activeDocument) return;
@@ -122,11 +137,25 @@ export default function Notion() {
       return;
     }
     
-    const newDoc = await createDocument(selectedSubjectId);
+    const templateContent = {
+      ...selectedTemplate.content,
+      time: Date.now()
+    };
+    
+    const newDoc = await createDocument(selectedSubjectId, selectedTemplate.name === "En blanco" ? "Sin título" : selectedTemplate.name);
     if (newDoc) {
-      setActiveDocument(newDoc);
-      setEditorContent(newDoc.contenido as OutputData || null);
+      // Update with template content and emoji
+      await updateDocument(newDoc.id, { 
+        contenido: templateContent,
+        emoji: selectedTemplate.emoji 
+      });
+      
+      setActiveDocument({ ...newDoc, contenido: templateContent, emoji: selectedTemplate.emoji });
+      setEditorContent(templateContent);
+      setLocalTitle(selectedTemplate.name === "En blanco" ? "Sin título" : selectedTemplate.name);
+      lastSavedContentRef.current = JSON.stringify(templateContent);
       setShowNewDocModal(false);
+      setSelectedTemplate(notionTemplates[0]); // Reset template selection
       checkAndUnlockAchievements();
     }
   };
@@ -151,6 +180,7 @@ export default function Notion() {
     const content = doc.contenido as OutputData;
     lastSavedContentRef.current = JSON.stringify(content);
     setEditorContent(content);
+    setLocalTitle(doc.titulo);
     setActiveDocument(doc);
   };
 
@@ -161,6 +191,7 @@ export default function Notion() {
     }
     setActiveDocument(null);
     setEditorContent(null);
+    setLocalTitle("");
     refetch();
   };
 
@@ -193,8 +224,8 @@ export default function Notion() {
               
               <input
                 type="text"
-                value={activeDocument.titulo}
-                onChange={(e) => handleTitleUpdate(e.target.value)}
+                value={localTitle}
+                onChange={(e) => handleTitleChange(e.target.value)}
                 className="text-xl font-display font-bold bg-transparent border-none outline-none focus:ring-0 max-w-md"
                 placeholder="Sin título"
               />
@@ -533,7 +564,7 @@ export default function Notion() {
             {selectedYear && (
               <div>
                 <label className="text-sm font-medium mb-2 block">Materia</label>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
                   {filteredSubjects.map(subject => (
                     <button
                       key={subject.id}
@@ -553,6 +584,32 @@ export default function Notion() {
               </div>
             )}
 
+            {selectedSubjectId && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">Plantilla</label>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                  {notionTemplates.map(template => (
+                    <button
+                      key={template.id}
+                      onClick={() => setSelectedTemplate(template)}
+                      className={cn(
+                        "p-3 rounded-lg text-left transition-all",
+                        selectedTemplate.id === template.id
+                          ? "bg-gradient-to-r from-neon-purple/20 to-neon-cyan/20 border-2 border-primary"
+                          : "bg-secondary hover:bg-secondary/80 border-2 border-transparent"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-lg">{template.emoji}</span>
+                        <p className="font-medium text-sm">{template.name}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{template.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button
               onClick={handleCreateDocument}
               disabled={!selectedSubjectId}
@@ -563,7 +620,7 @@ export default function Notion() {
                   : "bg-secondary text-muted-foreground cursor-not-allowed"
               )}
             >
-              Crear Apunte
+              {selectedTemplate.id === "blank" ? "Crear Apunte" : `Crear con "${selectedTemplate.name}"`}
             </button>
           </div>
         </DialogContent>
