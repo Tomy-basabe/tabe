@@ -9,6 +9,7 @@ export function generateGoogleCalendarUrl(event: {
   description?: string;
 }): string {
   const baseUrl = "https://calendar.google.com/calendar/render";
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   
   // Parse date
   const [year, month, day] = event.date.split("-").map(Number);
@@ -41,14 +42,17 @@ export function generateGoogleCalendarUrl(event: {
     text: event.title,
     dates: dates,
   });
+
+  // Hint Google Calendar which timezone to use (avoids wrong times / invalid parsing in some locales)
+  if (timezone) {
+    params.append("ctz", timezone);
+  }
   
   if (event.description) {
     params.append("details", event.description);
   }
   
-  const url = `${baseUrl}?${params.toString()}`;
-  console.log("Google Calendar URL generated:", url);
-  return url;
+  return `${baseUrl}?${params.toString()}`;
 }
 
 function formatDateTimeForGoogle(date: Date): string {
