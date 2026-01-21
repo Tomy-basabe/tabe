@@ -16,6 +16,7 @@ import Auth from "@/pages/Auth";
 import Flashcards from "@/pages/Flashcards";
 import Library from "@/pages/Library";
 import Achievements from "@/pages/Achievements";
+import Notion from "@/pages/Notion";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -85,6 +86,7 @@ const AppRoutes = () => (
       <Route path="/flashcards" element={<Flashcards />} />
       <Route path="/biblioteca" element={<Library />} />
       <Route path="/logros" element={<Achievements />} />
+      <Route path="/notion" element={<Notion />} />
       <Route path="/configuracion" element={<Settings />} />
     </Route>
     <Route path="*" element={<NotFound />} />

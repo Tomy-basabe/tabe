@@ -284,6 +284,56 @@ export type Database = {
           },
         ]
       }
+      notion_documents: {
+        Row: {
+          contenido: Json | null
+          cover_url: string | null
+          created_at: string
+          emoji: string | null
+          id: string
+          is_favorite: boolean | null
+          subject_id: string | null
+          titulo: string
+          total_time_seconds: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contenido?: Json | null
+          cover_url?: string | null
+          created_at?: string
+          emoji?: string | null
+          id?: string
+          is_favorite?: boolean | null
+          subject_id?: string | null
+          titulo?: string
+          total_time_seconds?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contenido?: Json | null
+          cover_url?: string | null
+          created_at?: string
+          emoji?: string | null
+          id?: string
+          is_favorite?: boolean | null
+          subject_id?: string | null
+          titulo?: string
+          total_time_seconds?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notion_documents_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
