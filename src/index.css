@@ -254,6 +254,187 @@
     border: 1px solid hsl(45 100% 55% / 0.5);
   }
 
+  /* LEGENDARY Subject Card - Epic Approved State */
+  .subject-legendary {
+    position: relative;
+    background: linear-gradient(
+      135deg, 
+      hsl(45 100% 15% / 0.9) 0%, 
+      hsl(35 100% 10% / 0.95) 50%,
+      hsl(45 100% 15% / 0.9) 100%
+    );
+    border: 2px solid transparent;
+    border-radius: 0.75rem;
+    overflow: hidden;
+  }
+
+  /* Animated gold border */
+  .subject-legendary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(
+      135deg,
+      hsl(45 100% 55%) 0%,
+      hsl(35 100% 65%) 25%,
+      hsl(45 100% 75%) 50%,
+      hsl(35 100% 65%) 75%,
+      hsl(45 100% 55%) 100%
+    );
+    background-size: 200% 200%;
+    animation: legendary-border 3s linear infinite;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* Shimmering overlay effect */
+  .subject-legendary::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      45deg,
+      transparent 30%,
+      hsl(45 100% 70% / 0.1) 45%,
+      hsl(45 100% 90% / 0.2) 50%,
+      hsl(45 100% 70% / 0.1) 55%,
+      transparent 70%
+    );
+    animation: legendary-shine 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes legendary-border {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  @keyframes legendary-shine {
+    0%, 100% {
+      transform: rotate(25deg) translateX(-100%);
+    }
+    50% {
+      transform: rotate(25deg) translateX(100%);
+    }
+  }
+
+  /* Floating particles for legendary */
+  @keyframes legendary-particle {
+    0%, 100% {
+      opacity: 0;
+      transform: translateY(0) scale(0);
+    }
+    10% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    90% {
+      opacity: 1;
+      transform: translateY(-30px) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-35px) scale(0);
+    }
+  }
+
+  .legendary-particles {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  .legendary-particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: hsl(45 100% 70%);
+    border-radius: 50%;
+    box-shadow: 0 0 6px hsl(45 100% 60%), 0 0 12px hsl(45 100% 50%);
+    animation: legendary-particle 3s ease-in-out infinite;
+  }
+
+  /* Epic glow pulse for legendary */
+  @keyframes legendary-glow {
+    0%, 100% {
+      box-shadow: 
+        0 0 20px hsl(45 100% 55% / 0.4),
+        0 0 40px hsl(45 100% 55% / 0.2),
+        0 0 60px hsl(45 100% 55% / 0.1),
+        inset 0 0 20px hsl(45 100% 55% / 0.05);
+    }
+    50% {
+      box-shadow: 
+        0 0 30px hsl(45 100% 60% / 0.6),
+        0 0 60px hsl(45 100% 55% / 0.4),
+        0 0 90px hsl(45 100% 55% / 0.2),
+        inset 0 0 30px hsl(45 100% 55% / 0.1);
+    }
+  }
+
+  .animate-legendary-glow {
+    animation: legendary-glow 2.5s ease-in-out infinite;
+  }
+
+  /* Crown icon animation */
+  @keyframes crown-float {
+    0%, 100% {
+      transform: translateY(0) rotate(-2deg);
+    }
+    25% {
+      transform: translateY(-3px) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-1px) rotate(2deg);
+    }
+    75% {
+      transform: translateY(-4px) rotate(0deg);
+    }
+  }
+
+  .animate-crown {
+    animation: crown-float 3s ease-in-out infinite;
+  }
+
+  /* Text shimmer effect */
+  @keyframes text-shimmer {
+    0% {
+      background-position: -200% center;
+    }
+    100% {
+      background-position: 200% center;
+    }
+  }
+
+  .legendary-text {
+    background: linear-gradient(
+      90deg,
+      hsl(45 100% 55%) 0%,
+      hsl(45 100% 75%) 25%,
+      hsl(45 100% 90%) 50%,
+      hsl(45 100% 75%) 75%,
+      hsl(45 100% 55%) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: text-shimmer 3s linear infinite;
+  }
+
   .subject-available {
     background: linear-gradient(135deg, hsl(142 76% 50% / 0.15) 0%, hsl(160 84% 40% / 0.1) 100%);
     border: 1px solid hsl(142 76% 50% / 0.5);
