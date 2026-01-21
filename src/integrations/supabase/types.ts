@@ -536,7 +536,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      check_and_unlock_achievements: {
+        Args: { p_user_id: string }
+        Returns: {
+          achievement_id: string
+          achievement_name: string
+          xp_reward: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

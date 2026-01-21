@@ -3,6 +3,33 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useRealtimeSubscription } from "./useRealtimeSubscription";
+
+// Hook para verificar logros (se llama externamente)
+export const checkAchievementsAfterSubjectUpdate = async (userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .rpc('check_and_unlock_achievements', { p_user_id: userId });
+    
+    if (error) {
+      console.error("Error checking achievements:", error);
+      return [];
+    }
+    
+    const unlocked = (data || []) as { achievement_id: string; achievement_name: string; xp_reward: number }[];
+    
+    unlocked.forEach((achievement) => {
+      toast.success(`🏆 ¡Logro desbloqueado!`, {
+        description: `${achievement.achievement_name} (+${achievement.xp_reward} XP)`,
+        duration: 5000,
+      });
+    });
+    
+    return unlocked;
+  } catch (err) {
+    console.error("Error in checkAchievementsAfterSubjectUpdate:", err);
+    return [];
+  }
+};
 export type SubjectStatus = "aprobada" | "regular" | "cursable" | "bloqueada" | "recursar";
 
 export interface Subject {
@@ -213,6 +240,9 @@ export function useSubjects() {
 
       await fetchData();
       toast.success("Estado actualizado correctamente");
+      
+      // Verificar logros después de actualizar estado de materia
+      await checkAchievementsAfterSubjectUpdate(user.id);
     } catch (error) {
       console.error("Error updating subject status:", error);
       toast.error("Error al actualizar el estado");

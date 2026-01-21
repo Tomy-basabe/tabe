@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { FlashcardDeck } from "@/components/flashcards/FlashcardDeck";
 import { StudyMode } from "@/components/flashcards/StudyMode";
 import { CompletionScreen } from "@/components/flashcards/CompletionScreen";
-
+import { useAchievements } from "@/hooks/useAchievements";
 interface Deck {
   id: string;
   nombre: string;
@@ -39,6 +39,7 @@ type StudyState = "browsing" | "studying" | "completed";
 
 export default function Flashcards() {
   const { user } = useAuth();
+  const { checkAndUnlockAchievements } = useAchievements();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
@@ -133,6 +134,8 @@ export default function Flashcards() {
       setNewDeckName("");
       setShowNewDeckModal(false);
       fetchDecks();
+      // Verificar logros después de crear un mazo
+      checkAndUnlockAchievements();
     }
   };
 
@@ -164,6 +167,8 @@ export default function Flashcards() {
         .eq("id", selectedDeck.id);
       
       fetchDecks();
+      // Verificar logros después de crear una tarjeta
+      checkAndUnlockAchievements();
     }
   };
 
@@ -202,9 +207,11 @@ export default function Flashcards() {
           tipo: "flashcard",
           completada: true,
         });
+      // Verificar logros después de completar estudio de flashcards
+      checkAndUnlockAchievements();
     }
     setStudyState("completed");
-  }, [user, selectedDeck, studyTime]);
+  }, [user, selectedDeck, studyTime, checkAndUnlockAchievements]);
 
   const startStudying = async (deck: Deck) => {
     const fetchedCards = await fetchCards(deck.id);

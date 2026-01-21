@@ -1,28 +1,10 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { 
   Trophy, GraduationCap, Star, Clock, BookOpen, Flame, 
-  Layers, Compass, FilePlus, Library, Lock, Sparkles 
+  Layers, Compass, FilePlus, Library, Lock, Sparkles, RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface Achievement {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  icono: string;
-  categoria: "academico" | "estudio" | "uso";
-  condicion_tipo: string;
-  condicion_valor: number;
-  xp_reward: number;
-}
-
-interface UserAchievement {
-  id: string;
-  achievement_id: string;
-  unlocked_at: string;
-}
+import { useAchievements } from "@/hooks/useAchievements";
 
 const iconMap: Record<string, any> = {
   trophy: Trophy,
@@ -59,68 +41,36 @@ const categoryConfig = {
 };
 
 export default function Achievements() {
-  const { user } = useAuth();
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [userAchievements, setUserAchievements] = useState<UserAchievement[]>([]);
+  const { 
+    achievements, 
+    loading, 
+    stats, 
+    isUnlocked, 
+    getUnlockDate,
+    checkAndUnlockAchievements
+  } = useAchievements();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(false);
 
+  // Verificar logros al cargar la página
   useEffect(() => {
-    if (user) {
-      fetchAchievements();
-      fetchUserAchievements();
-    }
-  }, [user]);
+    const checkOnLoad = async () => {
+      setChecking(true);
+      await checkAndUnlockAchievements();
+      setChecking(false);
+    };
+    checkOnLoad();
+  }, []);
 
-  const fetchAchievements = async () => {
-    const { data, error } = await supabase
-      .from("achievements")
-      .select("*")
-      .order("categoria", { ascending: true })
-      .order("xp_reward", { ascending: true });
-    
-    if (!error && data) {
-      setAchievements(data as Achievement[]);
-    }
-    setLoading(false);
-  };
-
-  const fetchUserAchievements = async () => {
-    const { data, error } = await supabase
-      .from("user_achievements")
-      .select("*");
-    
-    if (!error && data) {
-      setUserAchievements(data);
-    }
-  };
-
-  const isUnlocked = (achievementId: string) => {
-    return userAchievements.some(ua => ua.achievement_id === achievementId);
-  };
-
-  const getUnlockDate = (achievementId: string) => {
-    const ua = userAchievements.find(ua => ua.achievement_id === achievementId);
-    if (!ua) return null;
-    return new Date(ua.unlocked_at).toLocaleDateString("es-AR", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
+  const handleRefreshAchievements = async () => {
+    setChecking(true);
+    await checkAndUnlockAchievements();
+    setChecking(false);
   };
 
   const filteredAchievements = achievements.filter(
     a => !selectedCategory || a.categoria === selectedCategory
   );
-
-  const stats = {
-    total: achievements.length,
-    unlocked: userAchievements.length,
-    totalXP: userAchievements.reduce((sum, ua) => {
-      const achievement = achievements.find(a => a.id === ua.achievement_id);
-      return sum + (achievement?.xp_reward || 0);
-    }, 0),
-  };
 
   const groupedAchievements = {
     academico: filteredAchievements.filter(a => a.categoria === "academico"),
@@ -141,6 +91,14 @@ export default function Achievements() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleRefreshAchievements}
+            disabled={checking}
+            className="card-gamer rounded-xl px-4 py-2 flex items-center gap-2 hover:bg-secondary/80 transition-colors"
+          >
+            <RefreshCw className={cn("w-4 h-4", checking && "animate-spin")} />
+            <span className="text-sm">Verificar</span>
+          </button>
           <div className="card-gamer rounded-xl px-4 py-2 flex items-center gap-2">
             <Trophy className="w-4 h-4 text-neon-gold" />
             <span className="font-display font-bold text-neon-gold">{stats.unlocked}</span>

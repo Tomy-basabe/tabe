@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useAchievements } from "@/hooks/useAchievements";
 
 type TimerMode = "work" | "shortBreak" | "longBreak";
 
@@ -51,6 +52,7 @@ const modeConfig = {
 
 export default function Pomodoro() {
   const { user } = useAuth();
+  const { checkAndUnlockAchievements } = useAchievements();
   const [mode, setMode] = useState<TimerMode>("work");
   const [timeLeft, setTimeLeft] = useState(defaultSettings.work * 60);
   const [isRunning, setIsRunning] = useState(false);
@@ -174,6 +176,8 @@ export default function Pomodoro() {
       
       if (completed) {
         toast.success("¡Sesión de pomodoro completada! 🎉");
+        // Verificar logros después de completar un pomodoro
+        checkAndUnlockAchievements();
       }
     } catch (error) {
       console.error("Error saving session:", error);
