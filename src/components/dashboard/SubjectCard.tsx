@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { BookOpen, Lock, CheckCircle2, Clock, RotateCcw } from "lucide-react";
+import { BookOpen, Lock, Clock, RotateCcw } from "lucide-react";
+import { LegendarySubjectCard } from "@/components/subjects/LegendarySubjectCard";
 
 export type SubjectStatus = "aprobada" | "regular" | "cursable" | "bloqueada" | "recursar";
 
@@ -16,13 +17,6 @@ interface SubjectCardProps {
 }
 
 const statusConfig = {
-  aprobada: {
-    label: "Aprobada",
-    icon: CheckCircle2,
-    className: "subject-approved animate-pulse-gold",
-    iconColor: "text-neon-gold",
-    textColor: "text-neon-gold",
-  },
   regular: {
     label: "Regular",
     icon: Clock,
@@ -64,6 +58,21 @@ export function SubjectCard({
   onClick,
   compact = false,
 }: SubjectCardProps) {
+  // Use Legendary card for approved subjects
+  if (status === "aprobada") {
+    return (
+      <LegendarySubjectCard
+        nombre={nombre}
+        codigo={codigo}
+        nota={nota}
+        año={año}
+        numero_materia={numero_materia}
+        onClick={onClick}
+        compact={compact}
+      />
+    );
+  }
+
   const config = statusConfig[status];
   const Icon = config.icon;
 
