@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SubjectWithStatus, SubjectStatus } from "@/hooks/useSubjects";
-import { CheckCircle2, Clock, BookOpen, Lock, RotateCcw, Trophy, Star } from "lucide-react";
+import { CheckCircle2, Clock, BookOpen, Lock, RotateCcw, Trophy, Star, Link2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SubjectStatusModalProps {
@@ -9,6 +9,8 @@ interface SubjectStatusModalProps {
   open: boolean;
   onClose: () => void;
   onUpdate: (subjectId: string, status: SubjectStatus, nota?: number) => Promise<void>;
+  onEditDependencies?: (subject: SubjectWithStatus) => void;
+  onDelete?: (subjectId: string) => Promise<void>;
 }
 
 const statusOptions: { value: SubjectStatus; label: string; icon: any; color: string; description: string }[] = [
@@ -42,10 +44,18 @@ const statusOptions: { value: SubjectStatus; label: string; icon: any; color: st
   },
 ];
 
-export function SubjectStatusModal({ subject, open, onClose, onUpdate }: SubjectStatusModalProps) {
+export function SubjectStatusModal({ 
+  subject, 
+  open, 
+  onClose, 
+  onUpdate, 
+  onEditDependencies,
+  onDelete 
+}: SubjectStatusModalProps) {
   const [selectedStatus, setSelectedStatus] = useState<SubjectStatus | null>(null);
   const [nota, setNota] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   if (!subject) return null;
 
@@ -71,6 +81,18 @@ export function SubjectStatusModal({ subject, open, onClose, onUpdate }: Subject
     }
   };
 
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    setLoading(true);
+    try {
+      await onDelete(subject.id);
+      onClose();
+    } finally {
+      setLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   const isBlocked = subject.status === "bloqueada";
 
   return (
@@ -83,7 +105,31 @@ export function SubjectStatusModal({ subject, open, onClose, onUpdate }: Subject
           <p className="text-sm text-muted-foreground">{subject.codigo} • Año {subject.año}</p>
         </DialogHeader>
 
-        {isBlocked ? (
+        {showDeleteConfirm ? (
+          <div className="py-6 space-y-4">
+            <p className="text-center text-foreground">
+              ¿Estás seguro de que quieres eliminar esta materia?
+            </p>
+            <p className="text-center text-sm text-muted-foreground">
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-3 rounded-xl font-medium bg-secondary hover:bg-secondary/80 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={loading}
+                className="flex-1 py-3 rounded-xl font-medium bg-neon-red text-background hover:opacity-90 transition-all"
+              >
+                {loading ? "Eliminando..." : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        ) : isBlocked ? (
           <div className="py-6">
             <div className="flex items-center justify-center mb-4">
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
@@ -93,13 +139,34 @@ export function SubjectStatusModal({ subject, open, onClose, onUpdate }: Subject
             <p className="text-center text-muted-foreground mb-4">
               Esta materia está bloqueada. Necesitas:
             </p>
-            <div className="space-y-2">
+            <div className="space-y-2 mb-4">
               {subject.requisitos_faltantes.map((req, i) => (
                 <div key={i} className="flex items-center gap-2 p-3 bg-secondary rounded-lg">
                   <div className="w-2 h-2 rounded-full bg-neon-red" />
                   <span className="text-sm">{req}</span>
                 </div>
               ))}
+            </div>
+
+            {/* Actions for blocked subjects */}
+            <div className="flex gap-2">
+              {onEditDependencies && (
+                <button
+                  onClick={() => onEditDependencies(subject)}
+                  className="flex-1 py-2 rounded-xl font-medium bg-secondary hover:bg-secondary/80 transition-all text-sm flex items-center justify-center gap-2"
+                >
+                  <Link2 className="w-4 h-4" />
+                  Editar correlativas
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="py-2 px-4 rounded-xl font-medium bg-neon-red/10 text-neon-red hover:bg-neon-red/20 transition-all text-sm flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -158,19 +225,37 @@ export function SubjectStatusModal({ subject, open, onClose, onUpdate }: Subject
               </div>
             )}
 
-            {/* Save Button */}
-            <button
-              onClick={handleSave}
-              disabled={!selectedStatus || loading}
-              className={cn(
-                "w-full py-3 rounded-xl font-medium transition-all",
-                selectedStatus
-                  ? "bg-gradient-to-r from-neon-cyan to-neon-purple text-background hover:opacity-90"
-                  : "bg-secondary text-muted-foreground cursor-not-allowed"
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              {onEditDependencies && (
+                <button
+                  onClick={() => onEditDependencies(subject)}
+                  className="py-3 px-4 rounded-xl font-medium bg-secondary hover:bg-secondary/80 transition-all text-sm flex items-center gap-2"
+                >
+                  <Link2 className="w-4 h-4" />
+                </button>
               )}
-            >
-              {loading ? "Guardando..." : "Guardar cambios"}
-            </button>
+              {onDelete && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="py-3 px-4 rounded-xl font-medium bg-neon-red/10 text-neon-red hover:bg-neon-red/20 transition-all text-sm flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={handleSave}
+                disabled={!selectedStatus || loading}
+                className={cn(
+                  "flex-1 py-3 rounded-xl font-medium transition-all",
+                  selectedStatus
+                    ? "bg-gradient-to-r from-neon-cyan to-neon-purple text-background hover:opacity-90"
+                    : "bg-secondary text-muted-foreground cursor-not-allowed"
+                )}
+              >
+                {loading ? "Guardando..." : "Guardar cambios"}
+              </button>
+            </div>
           </div>
         )}
       </DialogContent>

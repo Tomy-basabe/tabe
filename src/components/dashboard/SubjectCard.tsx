@@ -7,9 +7,10 @@ interface SubjectCardProps {
   nombre: string;
   codigo: string;
   status: SubjectStatus;
-  nota?: number;
+  nota?: number | null;
   año: number;
   onClick?: () => void;
+  compact?: boolean;
 }
 
 const statusConfig = {
@@ -57,6 +58,7 @@ export function SubjectCard({
   nota,
   año,
   onClick,
+  compact = false,
 }: SubjectCardProps) {
   const config = statusConfig[status];
   const Icon = config.icon;
@@ -64,12 +66,11 @@ export function SubjectCard({
   return (
     <button
       onClick={onClick}
-      disabled={status === "bloqueada"}
       className={cn(
-        "w-full p-4 rounded-xl transition-all duration-300 text-left",
+        "w-full rounded-xl transition-all duration-300 text-left",
         config.className,
-        status !== "bloqueada" && "hover:scale-[1.02] hover:shadow-lg cursor-pointer",
-        status === "bloqueada" && "cursor-not-allowed"
+        "hover:scale-[1.02] hover:shadow-lg cursor-pointer",
+        compact ? "p-3" : "p-4"
       )}
     >
       <div className="flex items-start justify-between mb-2">
@@ -83,7 +84,8 @@ export function SubjectCard({
       </div>
 
       <h3 className={cn(
-        "font-medium text-sm mb-1 line-clamp-2",
+        "font-medium mb-1 line-clamp-2",
+        compact ? "text-xs" : "text-sm",
         status === "bloqueada" ? "text-muted-foreground" : "text-foreground"
       )}>
         {nombre}
@@ -91,7 +93,7 @@ export function SubjectCard({
 
       <div className="flex items-center justify-between mt-3">
         <span className="text-xs text-muted-foreground">{codigo}</span>
-        {nota !== undefined && (
+        {nota !== undefined && nota !== null && (
           <span className={cn(
             "text-sm font-display font-bold",
             nota >= 7 ? "text-neon-gold" : nota >= 4 ? "text-neon-cyan" : "text-neon-red"

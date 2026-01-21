@@ -1,43 +1,11 @@
 import { useState } from "react";
-import { Filter, GraduationCap, Search } from "lucide-react";
-import { SubjectCard, SubjectStatus } from "@/components/dashboard/SubjectCard";
+import { Filter, GraduationCap, Search, Plus, Loader2 } from "lucide-react";
+import { SubjectCard } from "@/components/dashboard/SubjectCard";
+import { SubjectStatusModal } from "@/components/subjects/SubjectStatusModal";
+import { AddSubjectModal } from "@/components/subjects/AddSubjectModal";
+import { EditDependenciesModal } from "@/components/subjects/EditDependenciesModal";
+import { useSubjects, SubjectWithStatus, SubjectStatus } from "@/hooks/useSubjects";
 import { cn } from "@/lib/utils";
-
-// Mock data completo del plan de carrera
-const allSubjects = [
-  // Año 1
-  { id: "1", nombre: "Análisis Matemático I", codigo: "AM1", status: "aprobada" as SubjectStatus, nota: 8, año: 1 },
-  { id: "2", nombre: "Álgebra y Geometría Analítica", codigo: "AGA", status: "aprobada" as SubjectStatus, nota: 7, año: 1 },
-  { id: "3", nombre: "Física I", codigo: "FI1", status: "regular" as SubjectStatus, año: 1 },
-  { id: "4", nombre: "Programación I", codigo: "PR1", status: "aprobada" as SubjectStatus, nota: 9, año: 1 },
-  { id: "5", nombre: "Sistemas y Organizaciones", codigo: "SYO", status: "aprobada" as SubjectStatus, nota: 8, año: 1 },
-  { id: "6", nombre: "Arquitectura de Computadoras", codigo: "ARQ", status: "aprobada" as SubjectStatus, nota: 7, año: 1 },
-  { id: "7", nombre: "Química General", codigo: "QUI", status: "aprobada" as SubjectStatus, nota: 6, año: 1 },
-  { id: "8", nombre: "Inglés I", codigo: "IN1", status: "aprobada" as SubjectStatus, nota: 10, año: 1 },
-  // Año 2
-  { id: "9", nombre: "Análisis Matemático II", codigo: "AM2", status: "regular" as SubjectStatus, año: 2 },
-  { id: "10", nombre: "Física II", codigo: "FI2", status: "cursable" as SubjectStatus, año: 2 },
-  { id: "11", nombre: "Programación II", codigo: "PR2", status: "regular" as SubjectStatus, año: 2 },
-  { id: "12", nombre: "Análisis de Sistemas", codigo: "ADS", status: "cursable" as SubjectStatus, año: 2 },
-  { id: "13", nombre: "Probabilidad y Estadística", codigo: "PYE", status: "cursable" as SubjectStatus, año: 2 },
-  { id: "14", nombre: "Paradigmas de Programación", codigo: "PDP", status: "bloqueada" as SubjectStatus, año: 2 },
-  { id: "15", nombre: "Sistemas Operativos", codigo: "SOP", status: "bloqueada" as SubjectStatus, año: 2 },
-  { id: "16", nombre: "Inglés II", codigo: "IN2", status: "cursable" as SubjectStatus, año: 2 },
-  // Año 3
-  { id: "17", nombre: "Base de Datos", codigo: "BDD", status: "bloqueada" as SubjectStatus, año: 3 },
-  { id: "18", nombre: "Diseño de Sistemas", codigo: "DDS", status: "bloqueada" as SubjectStatus, año: 3 },
-  { id: "19", nombre: "Redes de Computadoras", codigo: "RED", status: "bloqueada" as SubjectStatus, año: 3 },
-  { id: "20", nombre: "Matemática Discreta", codigo: "MAD", status: "bloqueada" as SubjectStatus, año: 3 },
-  { id: "21", nombre: "Ingeniería de Software I", codigo: "IS1", status: "bloqueada" as SubjectStatus, año: 3 },
-  { id: "22", nombre: "Sintaxis y Semántica de Lenguajes", codigo: "SSL", status: "bloqueada" as SubjectStatus, año: 3 },
-  // Año 4
-  { id: "23", nombre: "Ingeniería de Software II", codigo: "IS2", status: "bloqueada" as SubjectStatus, año: 4 },
-  { id: "24", nombre: "Gestión de Datos", codigo: "GDD", status: "bloqueada" as SubjectStatus, año: 4 },
-  { id: "25", nombre: "Simulación", codigo: "SIM", status: "bloqueada" as SubjectStatus, año: 4 },
-  { id: "26", nombre: "Administración de Recursos", codigo: "ADR", status: "bloqueada" as SubjectStatus, año: 4 },
-  { id: "27", nombre: "Inteligencia Artificial", codigo: "IAR", status: "bloqueada" as SubjectStatus, año: 4 },
-  { id: "28", nombre: "Comunicaciones", codigo: "COM", status: "bloqueada" as SubjectStatus, año: 4 },
-];
 
 const statusFilters = [
   { value: "all", label: "Todas", color: "bg-secondary text-foreground" },
@@ -48,11 +16,30 @@ const statusFilters = [
 ];
 
 export default function CareerPlan() {
+  const { 
+    subjects, 
+    rawSubjects,
+    loading, 
+    updateSubjectStatus, 
+    createSubject,
+    updateSubjectDependencies,
+    deleteSubject,
+    getYears 
+  } = useSubjects();
+  
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Modals
+  const [selectedSubject, setSelectedSubject] = useState<SubjectWithStatus | null>(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showDepsModal, setShowDepsModal] = useState(false);
 
-  const filteredSubjects = allSubjects.filter((subject) => {
+  const years = getYears();
+
+  const filteredSubjects = subjects.filter((subject) => {
     const matchesYear = selectedYear === null || subject.año === selectedYear;
     const matchesStatus = selectedStatus === "all" || subject.status === selectedStatus;
     const matchesSearch = subject.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -60,18 +47,40 @@ export default function CareerPlan() {
     return matchesYear && matchesStatus && matchesSearch;
   });
 
-  const subjectsByYear = [1, 2, 3, 4].map((year) => ({
+  const subjectsByYear = years.map((year) => ({
     year,
     subjects: filteredSubjects.filter((s) => s.año === year),
   }));
 
   const stats = {
-    total: allSubjects.length,
-    aprobadas: allSubjects.filter((s) => s.status === "aprobada").length,
-    regulares: allSubjects.filter((s) => s.status === "regular").length,
-    cursables: allSubjects.filter((s) => s.status === "cursable").length,
-    bloqueadas: allSubjects.filter((s) => s.status === "bloqueada").length,
+    total: subjects.length,
+    aprobadas: subjects.filter((s) => s.status === "aprobada").length,
+    regulares: subjects.filter((s) => s.status === "regular").length,
+    cursables: subjects.filter((s) => s.status === "cursable").length,
+    bloqueadas: subjects.filter((s) => s.status === "bloqueada").length,
   };
+
+  const handleSubjectClick = (subject: SubjectWithStatus) => {
+    setSelectedSubject(subject);
+    setShowStatusModal(true);
+  };
+
+  const handleEditDependencies = (subject: SubjectWithStatus) => {
+    setSelectedSubject(subject);
+    setShowStatusModal(false);
+    setShowDepsModal(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-12 h-12 animate-spin text-primary" />
+          <p className="text-muted-foreground">Cargando plan de carrera...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -82,10 +91,17 @@ export default function CareerPlan() {
             Plan de Carrera
           </h1>
           <p className="text-muted-foreground mt-1">
-            Ingeniería en Sistemas de Información
+            Gestiona tus materias y correlativas
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-neon-cyan to-neon-purple text-background font-medium hover:opacity-90 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar Materia
+          </button>
           <div className="card-gamer rounded-lg px-3 py-1.5 flex items-center gap-2">
             <GraduationCap className="w-4 h-4 text-neon-gold" />
             <span className="text-sm font-medium">{stats.aprobadas}/{stats.total}</span>
@@ -133,7 +149,7 @@ export default function CareerPlan() {
         {/* Year Filter */}
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-muted-foreground" />
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             <button
               onClick={() => setSelectedYear(null)}
               className={cn(
@@ -145,7 +161,7 @@ export default function CareerPlan() {
             >
               Todos
             </button>
-            {[1, 2, 3, 4].map((year) => (
+            {years.map((year) => (
               <button
                 key={year}
                 onClick={() => setSelectedYear(year)}
@@ -183,8 +199,8 @@ export default function CareerPlan() {
 
       {/* Subjects Grid by Year */}
       <div className="space-y-8">
-        {subjectsByYear.map(({ year, subjects }) => (
-          subjects.length > 0 && (
+        {subjectsByYear.map(({ year, subjects: yearSubjects }) => (
+          yearSubjects.length > 0 && (
             <div key={year}>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
@@ -193,12 +209,12 @@ export default function CareerPlan() {
                 <div>
                   <h2 className="font-display font-semibold text-lg">Año {year}</h2>
                   <p className="text-xs text-muted-foreground">
-                    {subjects.filter(s => s.status === "aprobada").length}/{subjects.length} completadas
+                    {yearSubjects.filter(s => s.status === "aprobada").length}/{yearSubjects.length} completadas
                   </p>
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {subjects.map((subject) => (
+                {yearSubjects.map((subject) => (
                   <SubjectCard
                     key={subject.id}
                     nombre={subject.nombre}
@@ -206,6 +222,7 @@ export default function CareerPlan() {
                     status={subject.status}
                     nota={subject.nota}
                     año={subject.año}
+                    onClick={() => handleSubjectClick(subject)}
                   />
                 ))}
               </div>
@@ -214,12 +231,57 @@ export default function CareerPlan() {
         ))}
       </div>
 
-      {filteredSubjects.length === 0 && (
+      {subjects.length === 0 && (
+        <div className="text-center py-12">
+          <GraduationCap className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <p className="text-muted-foreground mb-4">No hay materias cargadas todavía</p>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-6 py-3 rounded-xl bg-gradient-to-r from-neon-cyan to-neon-purple text-background font-medium hover:opacity-90 transition-all"
+          >
+            Agregar tu primera materia
+          </button>
+        </div>
+      )}
+
+      {subjects.length > 0 && filteredSubjects.length === 0 && (
         <div className="text-center py-12">
           <GraduationCap className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
           <p className="text-muted-foreground">No se encontraron materias con los filtros seleccionados</p>
         </div>
       )}
+
+      {/* Modals */}
+      <SubjectStatusModal
+        subject={selectedSubject}
+        open={showStatusModal}
+        onClose={() => {
+          setShowStatusModal(false);
+          setSelectedSubject(null);
+        }}
+        onUpdate={updateSubjectStatus}
+        onEditDependencies={handleEditDependencies}
+        onDelete={deleteSubject}
+      />
+
+      <AddSubjectModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSubmit={createSubject}
+        existingSubjects={rawSubjects}
+        years={years}
+      />
+
+      <EditDependenciesModal
+        subject={selectedSubject}
+        open={showDepsModal}
+        onClose={() => {
+          setShowDepsModal(false);
+          setSelectedSubject(null);
+        }}
+        onUpdate={updateSubjectDependencies}
+        allSubjects={rawSubjects}
+      />
     </div>
   );
 }

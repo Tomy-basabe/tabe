@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -21,17 +21,27 @@ export interface UserSubjectStatus {
   fecha_aprobacion: string | null;
 }
 
+export interface Dependency {
+  id: string;
+  subject_id: string;
+  requiere_regular: string | null;
+  requiere_aprobada: string | null;
+}
+
 export interface SubjectWithStatus extends Subject {
   status: SubjectStatus;
   nota: number | null;
   fecha_aprobacion: string | null;
   requisitos_faltantes: string[];
+  dependencies: Dependency[];
 }
 
-interface Dependency {
-  subject_id: string;
-  requiere_regular: string | null;
-  requiere_aprobada: string | null;
+export interface CreateSubjectData {
+  nombre: string;
+  codigo: string;
+  año: number;
+  requiere_regular?: string[];
+  requiere_aprobada?: string[];
 }
 
 export function useSubjects() {
@@ -41,13 +51,7 @@ export function useSubjects() {
   const [dependencies, setDependencies] = useState<Dependency[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -86,12 +90,18 @@ export function useSubjects() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const getSubjectStatus = (subjectId: string): SubjectStatus => {
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user, fetchData]);
+
+  const getSubjectStatus = useCallback((subjectId: string): SubjectStatus => {
     const userStatus = userStatuses.find(s => s.subject_id === subjectId);
     if (userStatus) {
-      return userStatus.estado as SubjectStatus;
+      return userStatus.estado;
     }
     
     // Check if subject is unlocked based on dependencies
@@ -114,9 +124,9 @@ export function useSubjects() {
     });
 
     return canTake ? "cursable" : "bloqueada";
-  };
+  }, [userStatuses, dependencies]);
 
-  const getMissingRequirements = (subjectId: string): string[] => {
+  const getMissingRequirements = useCallback((subjectId: string): string[] => {
     const deps = dependencies.filter(d => d.subject_id === subjectId);
     const missing: string[] = [];
 
@@ -138,12 +148,13 @@ export function useSubjects() {
     });
 
     return missing;
-  };
+  }, [dependencies, userStatuses, subjects]);
 
-  const getSubjectsWithStatus = (): SubjectWithStatus[] => {
+  const getSubjectsWithStatus = useCallback((): SubjectWithStatus[] => {
     return subjects.map(subject => {
       const userStatus = userStatuses.find(s => s.subject_id === subject.id);
       const status = getSubjectStatus(subject.id);
+      const subjectDeps = dependencies.filter(d => d.subject_id === subject.id);
       
       return {
         ...subject,
@@ -151,9 +162,10 @@ export function useSubjects() {
         nota: userStatus?.nota ?? null,
         fecha_aprobacion: userStatus?.fecha_aprobacion ?? null,
         requisitos_faltantes: status === "bloqueada" ? getMissingRequirements(subject.id) : [],
+        dependencies: subjectDeps,
       };
     });
-  };
+  }, [subjects, userStatuses, dependencies, getSubjectStatus, getMissingRequirements]);
 
   const updateSubjectStatus = async (
     subjectId: string, 
@@ -196,10 +208,156 @@ export function useSubjects() {
     }
   };
 
+  const createSubject = async (data: CreateSubjectData) => {
+    if (!user) return;
+
+    try {
+      // Get the next numero_materia for the year
+      const subjectsInYear = subjects.filter(s => s.año === data.año);
+      const nextNumero = subjectsInYear.length > 0 
+        ? Math.max(...subjectsInYear.map(s => s.numero_materia)) + 1 
+        : 1;
+
+      // Create the subject
+      const { data: newSubject, error: subjectError } = await supabase
+        .from("subjects")
+        .insert({
+          nombre: data.nombre,
+          codigo: data.codigo,
+          año: data.año,
+          numero_materia: nextNumero,
+        })
+        .select()
+        .single();
+
+      if (subjectError) throw subjectError;
+
+      // Create dependencies for regular requirements
+      if (data.requiere_regular && data.requiere_regular.length > 0) {
+        const regularDeps = data.requiere_regular.map(reqId => ({
+          subject_id: newSubject.id,
+          requiere_regular: reqId,
+        }));
+        
+        const { error: regError } = await supabase
+          .from("subject_dependencies")
+          .insert(regularDeps);
+        
+        if (regError) throw regError;
+      }
+
+      // Create dependencies for approved requirements
+      if (data.requiere_aprobada && data.requiere_aprobada.length > 0) {
+        const approvedDeps = data.requiere_aprobada.map(reqId => ({
+          subject_id: newSubject.id,
+          requiere_aprobada: reqId,
+        }));
+        
+        const { error: aprError } = await supabase
+          .from("subject_dependencies")
+          .insert(approvedDeps);
+        
+        if (aprError) throw aprError;
+      }
+
+      await fetchData();
+      toast.success("Materia creada correctamente");
+      return newSubject;
+    } catch (error) {
+      console.error("Error creating subject:", error);
+      toast.error("Error al crear la materia");
+      throw error;
+    }
+  };
+
+  const updateSubjectDependencies = async (
+    subjectId: string,
+    requiere_regular: string[],
+    requiere_aprobada: string[]
+  ) => {
+    try {
+      // Delete existing dependencies
+      const { error: deleteError } = await supabase
+        .from("subject_dependencies")
+        .delete()
+        .eq("subject_id", subjectId);
+
+      if (deleteError) throw deleteError;
+
+      // Create new dependencies
+      const newDeps: { subject_id: string; requiere_regular?: string; requiere_aprobada?: string }[] = [];
+
+      requiere_regular.forEach(reqId => {
+        newDeps.push({ subject_id: subjectId, requiere_regular: reqId });
+      });
+
+      requiere_aprobada.forEach(reqId => {
+        newDeps.push({ subject_id: subjectId, requiere_aprobada: reqId });
+      });
+
+      if (newDeps.length > 0) {
+        const { error: insertError } = await supabase
+          .from("subject_dependencies")
+          .insert(newDeps);
+
+        if (insertError) throw insertError;
+      }
+
+      await fetchData();
+      toast.success("Correlativas actualizadas correctamente");
+    } catch (error) {
+      console.error("Error updating dependencies:", error);
+      toast.error("Error al actualizar las correlativas");
+      throw error;
+    }
+  };
+
+  const deleteSubject = async (subjectId: string) => {
+    try {
+      // Delete dependencies first
+      await supabase
+        .from("subject_dependencies")
+        .delete()
+        .eq("subject_id", subjectId);
+
+      // Delete user statuses
+      await supabase
+        .from("user_subject_status")
+        .delete()
+        .eq("subject_id", subjectId);
+
+      // Delete the subject
+      const { error } = await supabase
+        .from("subjects")
+        .delete()
+        .eq("id", subjectId);
+
+      if (error) throw error;
+
+      await fetchData();
+      toast.success("Materia eliminada correctamente");
+    } catch (error) {
+      console.error("Error deleting subject:", error);
+      toast.error("Error al eliminar la materia");
+      throw error;
+    }
+  };
+
+  const getYears = useCallback((): number[] => {
+    const years = [...new Set(subjects.map(s => s.año))].sort((a, b) => a - b);
+    return years.length > 0 ? years : [1, 2, 3, 4, 5];
+  }, [subjects]);
+
   return {
     subjects: getSubjectsWithStatus(),
+    rawSubjects: subjects,
+    dependencies,
     loading,
     updateSubjectStatus,
+    createSubject,
+    updateSubjectDependencies,
+    deleteSubject,
     refetch: fetchData,
+    getYears,
   };
 }
