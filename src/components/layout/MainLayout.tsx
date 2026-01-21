@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -18,6 +18,8 @@ import {
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { NotionIcon } from "@/components/icons/NotionIcon";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
@@ -33,9 +35,83 @@ const navItems = [
   { icon: Settings, label: "Configuración", path: "/configuracion" },
 ];
 
+interface UserStats {
+  xp_total: number;
+  nivel: number;
+}
+
 export function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+
+  // Fetch user stats for XP display
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      if (!user) return;
+      
+      const { data } = await supabase
+        .from("user_stats")
+        .select("xp_total, nivel")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      if (data) {
+        setUserStats(data);
+      }
+    };
+
+    fetchUserStats();
+
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel("sidebar-user-stats")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_stats",
+          filter: `user_id=eq.${user?.id}`,
+        },
+        () => {
+          fetchUserStats();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // Calculate XP progress to next level
+  const getXpProgress = () => {
+    if (!userStats) return { currentXp: 0, level: 1, progress: 0, xpForNext: 100 };
+    
+    const level = userStats.nivel;
+    const totalXp = userStats.xp_total;
+    
+    // XP needed per level: level * 100 (Level 1 = 100 XP, Level 2 = 200 XP, etc.)
+    const xpForCurrentLevel = (level - 1) * 100;
+    const xpForNextLevel = level * 100;
+    const xpInCurrentLevel = totalXp - xpForCurrentLevel * level / 2; // Approximate based on sum
+    
+    // Simplified: just show total and estimate progress
+    const xpNeededForNext = level * 100;
+    const xpProgress = (totalXp % xpNeededForNext) / xpNeededForNext * 100;
+    const remaining = xpNeededForNext - (totalXp % xpNeededForNext);
+    
+    return {
+      currentXp: totalXp,
+      level,
+      progress: Math.min(xpProgress, 100),
+      xpForNext: remaining,
+    };
+  };
+
+  const xpData = getXpProgress();
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,7 +139,7 @@ export function MainLayout() {
         )}
       >
         {/* Logo */}
-        <div className="h-16 flex items-center gap-3 px-6 border-b border-sidebar-border">
+        <div className="h-16 flex items-center gap-3 px-6 border-b border-sidebar-border flex-shrink-0">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center glow-cyan">
             <Zap className="w-6 h-6 text-background" />
           </div>
@@ -73,9 +149,9 @@ export function MainLayout() {
           </div>
         </div>
 
-        {/* Navigation with ScrollArea */}
-        <ScrollArea className="flex-1 px-4 py-4">
-          <nav className="space-y-2">
+        {/* Navigation with ScrollArea - now takes remaining space */}
+        <ScrollArea className="flex-1">
+          <nav className="space-y-2 p-4">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
@@ -108,22 +184,27 @@ export function MainLayout() {
           </nav>
         </ScrollArea>
 
-        {/* User Progress Summary */}
-        <div className="absolute bottom-4 left-4 right-4">
+        {/* User Progress Summary - Fixed at bottom, not absolute */}
+        <div className="p-4 border-t border-sidebar-border flex-shrink-0">
           <div className="card-gamer rounded-xl p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-gold to-neon-cyan flex items-center justify-center text-background font-display font-bold text-sm">
-                TL
+                {xpData.level}
               </div>
               <div>
-                <p className="font-medium text-sm">Nivel 12</p>
-                <p className="text-xs text-muted-foreground">1,250 XP</p>
+                <p className="font-medium text-sm">Nivel {xpData.level}</p>
+                <p className="text-xs text-muted-foreground">{xpData.currentXp.toLocaleString()} XP</p>
               </div>
             </div>
             <div className="progress-gamer h-2">
-              <div className="progress-gamer-bar" style={{ width: "65%" }} />
+              <div 
+                className="progress-gamer-bar transition-all duration-500" 
+                style={{ width: `${xpData.progress}%` }} 
+              />
             </div>
-            <p className="text-xs text-muted-foreground mt-2">750 XP para nivel 13</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              {Math.round(xpData.xpForNext)} XP para nivel {xpData.level + 1}
+            </p>
           </div>
         </div>
       </aside>
