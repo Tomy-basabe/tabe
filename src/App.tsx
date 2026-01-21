@@ -17,6 +17,7 @@ import Flashcards from "@/pages/Flashcards";
 import Library from "@/pages/Library";
 import Achievements from "@/pages/Achievements";
 import Notion from "@/pages/Notion";
+import AdminPanel from "@/pages/AdminPanel";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -88,6 +89,7 @@ const AppRoutes = () => (
       <Route path="/logros" element={<Achievements />} />
       <Route path="/notion" element={<Notion />} />
       <Route path="/configuracion" element={<Settings />} />
+      <Route path="/admin" element={<AdminPanel />} />
     </Route>
     <Route path="*" element={<NotFound />} />
   </Routes>

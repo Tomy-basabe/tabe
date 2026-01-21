@@ -13,7 +13,8 @@ import {
   Zap,
   Layers,
   Library,
-  Trophy
+  Trophy,
+  Shield
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,7 +22,7 @@ import { NotionIcon } from "@/components/icons/NotionIcon";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
-const navItems = [
+const baseNavItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
   { icon: GraduationCap, label: "Plan de Carrera", path: "/carrera" },
   { icon: NotionIcon, label: "Notion", path: "/notion" },
@@ -35,6 +36,8 @@ const navItems = [
   { icon: Settings, label: "Configuración", path: "/configuracion" },
 ];
 
+const adminNavItem = { icon: Shield, label: "Admin", path: "/admin" };
+
 interface UserStats {
   xp_total: number;
   nivel: number;
@@ -45,6 +48,25 @@ export function MainLayout() {
   const location = useLocation();
   const { user } = useAuth();
   const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      setIsAdmin(!!data);
+    };
+    checkAdmin();
+  }, [user]);
+
+  // Build nav items dynamically
+  const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems;
 
   // Fetch user stats for XP display
   useEffect(() => {
