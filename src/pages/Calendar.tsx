@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Trash2, Loader2, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Trash2, Loader2, ExternalLink, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCalendarEvents, CalendarEvent, EventType } from "@/hooks/useCalendarEvents";
+import { useCalendarEvents, CalendarEvent, EventType, CreateEventData } from "@/hooks/useCalendarEvents";
 import { useSubjects } from "@/hooks/useSubjects";
 import { AddEventModal } from "@/components/calendar/AddEventModal";
+import { ImportICSModal } from "@/components/calendar/ImportICSModal";
 import { generateGoogleCalendarUrl } from "@/lib/googleCalendarUrl";
 import { toast } from "sonner";
 
@@ -29,6 +30,7 @@ export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -199,12 +201,19 @@ export default function Calendar() {
             Planifica y visualiza tus exámenes y sesiones de estudio
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={goToToday}
             className="px-4 py-2 bg-secondary rounded-lg text-sm font-medium hover:bg-secondary/80 transition-colors"
           >
             Hoy
+          </button>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="px-4 py-2 bg-secondary rounded-lg text-sm font-medium hover:bg-secondary/80 transition-colors flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
+            Importar
           </button>
           <button 
             onClick={() => handleAddEvent()}
@@ -289,27 +298,11 @@ export default function Calendar() {
                 <div
                   key={event.id}
                   className={cn(
-                    "p-3 rounded-lg border relative group",
+                    "p-3 rounded-lg border relative",
                     eventTypeColors[event.tipo_examen]
                   )}
                 >
-                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleExportToGoogle(event)}
-                      className="p-1 rounded hover:bg-background/20"
-                      title="Exportar a Google Calendar"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteEvent(event.id)}
-                      className="p-1 rounded hover:bg-background/20"
-                      title="Eliminar evento"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <p className="font-medium text-sm pr-12">{event.titulo}</p>
+                  <p className="font-medium text-sm">{event.titulo}</p>
                   {event.hora && (
                     <p className="text-xs opacity-80 mt-1">{event.hora}</p>
                   )}
@@ -319,6 +312,22 @@ export default function Calendar() {
                   {event.notas && (
                     <p className="text-xs opacity-70 mt-2 italic">{event.notas}</p>
                   )}
+                  {/* Action buttons - always visible */}
+                  <div className="flex gap-2 mt-3 pt-2 border-t border-current/20">
+                    <button
+                      onClick={() => handleExportToGoogle(event)}
+                      className="flex-1 py-1.5 rounded text-xs font-medium bg-background/20 hover:bg-background/40 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Google
+                    </button>
+                    <button
+                      onClick={() => handleDeleteEvent(event.id)}
+                      className="py-1.5 px-3 rounded text-xs font-medium bg-background/20 hover:bg-red-500/30 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               ))}
               <button 
@@ -353,6 +362,17 @@ export default function Calendar() {
         onSubmit={createEvent}
         subjects={rawSubjects}
         initialDate={selectedDate || undefined}
+      />
+
+      {/* Import ICS Modal */}
+      <ImportICSModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={async (eventsToImport) => {
+          for (const eventData of eventsToImport) {
+            await createEvent(eventData);
+          }
+        }}
       />
     </div>
   );
