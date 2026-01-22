@@ -10,14 +10,15 @@ import { NotionIcon } from "@/components/icons/NotionIcon";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { EditorJSComponent } from "@/components/notion/EditorJS";
+import { AdvancedNotionEditor } from "@/components/notion/AdvancedNotionEditor";
 import { DocumentTimer } from "@/components/notion/DocumentTimer";
 import { EmojiPicker } from "@/components/notion/EmojiPicker";
-import { PDFExporter } from "@/components/notion/PDFExporter";
+import { TipTapPDFExporter } from "@/components/notion/TipTapPDFExporter";
 import { useNotionDocuments, NotionDocument } from "@/hooks/useNotionDocuments";
 import { useAchievements } from "@/hooks/useAchievements";
-import { OutputData } from "@editorjs/editorjs";
-import { notionTemplates, NotionTemplate } from "@/lib/notionTemplates";
+import { JSONContent } from "@tiptap/core";
+import { tipTapTemplates, TipTapTemplate } from "@/lib/tipTapTemplates";
+import { ensureTipTapFormat } from "@/lib/contentMigration";
 
 interface Subject {
   id: string;
@@ -40,12 +41,12 @@ export default function Notion() {
   const [docToDelete, setDocToDelete] = useState<NotionDocument | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [editorContent, setEditorContent] = useState<OutputData | null>(null);
+  const [editorContent, setEditorContent] = useState<JSONContent | null>(null);
   const [localTitle, setLocalTitle] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState<NotionTemplate>(notionTemplates[0]);
+  const [selectedTemplate, setSelectedTemplate] = useState<TipTapTemplate>(tipTapTemplates[0]);
 
   // Keep latest content out of React render loop to avoid Editor.js cursor jumps
-  const editorContentRef = useRef<OutputData | null>(null);
+  const editorContentRef = useRef<JSONContent | null>(null);
   const contentStateSyncTimeoutRef = useRef<number | null>(null);
   
   const lastSavedContentRef = useRef<string>("");
@@ -83,7 +84,7 @@ export default function Notion() {
   });
 
   // Track content changes without re-rendering on every keystroke
-  const handleContentUpdate = useCallback((content: OutputData) => {
+  const handleContentUpdate = useCallback((content: JSONContent) => {
     if (!activeDocument) return;
     editorContentRef.current = content;
 
@@ -111,7 +112,7 @@ export default function Notion() {
     
     setIsSaving(true);
     try {
-      const updates: { contenido?: OutputData; titulo?: string } = {};
+      const updates: { contenido?: JSONContent; titulo?: string } = {};
       
       const contentToSave = editorContentRef.current ?? editorContent;
       if (contentToSave) {
@@ -167,10 +168,7 @@ export default function Notion() {
       return;
     }
     
-    const templateContent = {
-      ...selectedTemplate.content,
-      time: Date.now()
-    };
+    const templateContent = selectedTemplate.content;
     
     const newDoc = await createDocument(selectedSubjectId, selectedTemplate.name === "En blanco" ? "Sin título" : selectedTemplate.name);
     if (newDoc) {
@@ -185,7 +183,7 @@ export default function Notion() {
       setLocalTitle(selectedTemplate.name === "En blanco" ? "Sin título" : selectedTemplate.name);
       lastSavedContentRef.current = JSON.stringify(templateContent);
       setShowNewDocModal(false);
-      setSelectedTemplate(notionTemplates[0]); // Reset template selection
+      setSelectedTemplate(tipTapTemplates[0]); // Reset template selection
       checkAndUnlockAchievements();
     }
   };
@@ -207,7 +205,8 @@ export default function Notion() {
   }, [activeDocument, addStudyTime]);
 
   const openDocument = (doc: NotionDocument) => {
-    const content = doc.contenido as OutputData;
+    // Convert EditorJS format to TipTap if needed
+    const content = ensureTipTapFormat(doc.contenido) || { type: "doc", content: [{ type: "paragraph" }] };
     lastSavedContentRef.current = JSON.stringify(content);
     setEditorContent(content);
     editorContentRef.current = content;
@@ -285,7 +284,7 @@ export default function Notion() {
               <DocumentTimer onSaveTime={handleSaveTime} />
               
               {user && (
-                <PDFExporter
+                <TipTapPDFExporter
                   documentTitle={localTitle || activeDocument.titulo}
                   documentEmoji={activeDocument.emoji}
                   getContent={() => editorContentRef.current ?? editorContent}
@@ -315,8 +314,8 @@ export default function Notion() {
         </div>
 
         {/* Editor */}
-        <div className="flex-1 max-w-4xl mx-auto w-full px-4">
-          <EditorJSComponent
+        <div className="flex-1 w-full">
+          <AdvancedNotionEditor
             content={editorContent}
             onUpdate={handleContentUpdate}
             documentId={activeDocument.id}
@@ -621,7 +620,7 @@ export default function Notion() {
               <div>
                 <label className="text-sm font-medium mb-2 block">Plantilla</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                  {notionTemplates.map(template => (
+                  {tipTapTemplates.map(template => (
                     <button
                       key={template.id}
                       onClick={() => setSelectedTemplate(template)}

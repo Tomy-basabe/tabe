@@ -1,0 +1,330 @@
+import { useState } from "react";
+import { Download, Loader2, Library } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { JSONContent } from "@tiptap/core";
+
+interface TipTapPDFExporterProps {
+  documentTitle: string;
+  documentEmoji: string;
+  getContent: () => JSONContent | null;
+  subjectId: string | null;
+  userId: string;
+  onExported?: () => void;
+}
+
+export function TipTapPDFExporter({ 
+  documentTitle, 
+  documentEmoji,
+  getContent, 
+  subjectId, 
+  userId,
+  onExported 
+}: TipTapPDFExporterProps) {
+  const [exporting, setExporting] = useState(false);
+  const [saveToLibrary, setSaveToLibrary] = useState(true);
+
+  const convertToHtml = (data: JSONContent): string => {
+    if (!data || !data.content) return "";
+
+    let html = `
+      <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1a1a1a;">
+        <div style="text-align: center; margin-bottom: 40px;">
+          <span style="font-size: 48px;">${documentEmoji}</span>
+          <h1 style="font-size: 28px; font-weight: 700; margin-top: 16px; color: #0f0f0f;">${documentTitle || "Sin título"}</h1>
+          <p style="color: #666; font-size: 14px; margin-top: 8px;">Exportado el ${new Date().toLocaleDateString("es-AR", { 
+            day: "numeric", 
+            month: "long", 
+            year: "numeric" 
+          })}</p>
+        </div>
+    `;
+
+    const processContent = (content: JSONContent[]): string => {
+      let result = "";
+
+      content.forEach((node) => {
+        switch (node.type) {
+          case "paragraph":
+            result += `<p style="line-height: 1.8; margin-bottom: 16px; font-size: 16px;">${renderInlineContent(node.content)}</p>`;
+            break;
+
+          case "heading":
+            const level = node.attrs?.level || 2;
+            const headerSizes: Record<number, string> = {
+              1: "font-size: 32px; font-weight: 700; margin: 32px 0 16px;",
+              2: "font-size: 24px; font-weight: 600; margin: 28px 0 14px;",
+              3: "font-size: 20px; font-weight: 600; margin: 24px 0 12px;",
+            };
+            result += `<h${level} style="${headerSizes[level]}">${renderInlineContent(node.content)}</h${level}>`;
+            break;
+
+          case "bulletList":
+            result += `<ul style="list-style: disc; padding-left: 24px; margin-bottom: 16px;">`;
+            (node.content || []).forEach((item) => {
+              result += `<li style="margin-bottom: 8px; line-height: 1.6;">${renderInlineContent(item.content?.[0]?.content)}</li>`;
+            });
+            result += `</ul>`;
+            break;
+
+          case "orderedList":
+            result += `<ol style="list-style: decimal; padding-left: 24px; margin-bottom: 16px;">`;
+            (node.content || []).forEach((item) => {
+              result += `<li style="margin-bottom: 8px; line-height: 1.6;">${renderInlineContent(item.content?.[0]?.content)}</li>`;
+            });
+            result += `</ol>`;
+            break;
+
+          case "taskList":
+            result += `<div style="margin-bottom: 16px;">`;
+            (node.content || []).forEach((item) => {
+              const checked = item.attrs?.checked;
+              const checkbox = checked ? "☑" : "☐";
+              const textStyle = checked ? "text-decoration: line-through; color: #888;" : "";
+              result += `<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">${checkbox}</span>
+                <span style="${textStyle}">${renderInlineContent(item.content?.[0]?.content)}</span>
+              </div>`;
+            });
+            result += `</div>`;
+            break;
+
+          case "blockquote":
+            result += `<blockquote style="border-left: 4px solid #00d9ff; padding-left: 16px; margin: 24px 0; font-style: italic; color: #555;">`;
+            (node.content || []).forEach((p) => {
+              result += `<p style="margin-bottom: 8px;">${renderInlineContent(p.content)}</p>`;
+            });
+            result += `</blockquote>`;
+            break;
+
+          case "codeBlock":
+            result += `<pre style="background: #1a1a2e; color: #e0e0e0; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: 'Fira Code', monospace; font-size: 14px; margin-bottom: 16px;"><code>${node.content?.[0]?.text || ""}</code></pre>`;
+            break;
+
+          case "horizontalRule":
+            result += `<hr style="border: none; border-top: 2px solid #eee; margin: 32px 0;" />`;
+            break;
+
+          case "callout":
+            const calloutType = node.attrs?.type || "info";
+            const calloutColors: Record<string, { bg: string; border: string; icon: string }> = {
+              info: { bg: "#e3f2fd", border: "#2196f3", icon: "ℹ️" },
+              success: { bg: "#e8f5e9", border: "#4caf50", icon: "✅" },
+              warning: { bg: "#fff3cd", border: "#ffc107", icon: "⚠️" },
+              danger: { bg: "#ffebee", border: "#f44336", icon: "🚫" },
+              tip: { bg: "#f3e5f5", border: "#9c27b0", icon: "💡" },
+            };
+            const colors = calloutColors[calloutType] || calloutColors.info;
+            result += `<div style="display: flex; gap: 12px; background: ${colors.bg}; border: 1px solid ${colors.border}; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+              <span style="font-size: 20px;">${colors.icon}</span>
+              <div>${processContent(node.content || [])}</div>
+            </div>`;
+            break;
+
+          case "table":
+            result += `<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">`;
+            (node.content || []).forEach((row, rowIndex) => {
+              result += `<tr>`;
+              (row.content || []).forEach((cell) => {
+                const isHeader = cell.type === "tableHeader";
+                const cellStyle = isHeader
+                  ? "background: #f5f5f5; font-weight: 600; padding: 12px; border: 1px solid #ddd;"
+                  : "padding: 12px; border: 1px solid #ddd;";
+                result += `<td style="${cellStyle}">${renderInlineContent(cell.content?.[0]?.content)}</td>`;
+              });
+              result += `</tr>`;
+            });
+            result += `</table>`;
+            break;
+
+          case "image":
+            result += `<figure style="margin: 24px 0; text-align: center;">
+              <img src="${node.attrs?.src || ""}" alt="${node.attrs?.alt || ""}" style="max-width: 100%; border-radius: 8px;" />
+              ${node.attrs?.alt ? `<figcaption style="color: #888; font-size: 14px; margin-top: 8px;">${node.attrs.alt}</figcaption>` : ""}
+            </figure>`;
+            break;
+
+          case "details":
+            result += `<details style="margin: 16px 0; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">`;
+            (node.content || []).forEach((child) => {
+              if (child.type === "detailsSummary") {
+                result += `<summary style="padding: 12px 16px; background: #f5f5f5; cursor: pointer; font-weight: 500;">${renderInlineContent(child.content)}</summary>`;
+              } else if (child.type === "detailsContent") {
+                result += `<div style="padding: 16px;">${processContent(child.content || [])}</div>`;
+              }
+            });
+            result += `</details>`;
+            break;
+        }
+      });
+
+      return result;
+    };
+
+    const renderInlineContent = (content: JSONContent[] | undefined): string => {
+      if (!content) return "";
+
+      return content
+        .map((node) => {
+          if (node.type === "text") {
+            let text = node.text || "";
+            const marks = node.marks || [];
+
+            marks.forEach((mark) => {
+              switch (mark.type) {
+                case "bold":
+                  text = `<strong>${text}</strong>`;
+                  break;
+                case "italic":
+                  text = `<em>${text}</em>`;
+                  break;
+                case "underline":
+                  text = `<u>${text}</u>`;
+                  break;
+                case "strike":
+                  text = `<s>${text}</s>`;
+                  break;
+                case "code":
+                  text = `<code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-family: monospace;">${text}</code>`;
+                  break;
+                case "highlight":
+                  text = `<mark style="background: #ffeb3b;">${text}</mark>`;
+                  break;
+                case "link":
+                  text = `<a href="${mark.attrs?.href || ""}" style="color: #2196f3; text-decoration: underline;">${text}</a>`;
+                  break;
+              }
+            });
+
+            return text;
+          }
+          return "";
+        })
+        .join("");
+    };
+
+    html += processContent(data.content);
+    html += `</div>`;
+    return html;
+  };
+
+  const exportToPDF = async () => {
+    const content = getContent();
+    if (!content || !content.content || content.content.length === 0) {
+      toast.error("El documento está vacío");
+      return;
+    }
+
+    setExporting(true);
+
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+      const htmlContent = convertToHtml(content);
+      
+      const container = document.createElement("div");
+      container.innerHTML = htmlContent;
+      container.style.position = "absolute";
+      container.style.left = "-9999px";
+      document.body.appendChild(container);
+
+      const fileName = `${documentTitle || "apunte"}-${Date.now()}`;
+
+      const opt = {
+        margin: [10, 10, 10, 10] as [number, number, number, number],
+        filename: `${fileName}.pdf`,
+        image: { type: "jpeg" as const, quality: 0.98 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          logging: false
+        },
+        jsPDF: { 
+          unit: "mm" as const, 
+          format: "a4" as const, 
+          orientation: "portrait" as const
+        }
+      };
+
+      if (saveToLibrary && subjectId) {
+        const pdfBlob = await html2pdf().set(opt).from(container).outputPdf("blob");
+        
+        const storagePath = `${userId}/${fileName}.pdf`;
+        const { error: uploadError } = await supabase.storage
+          .from("library-files")
+          .upload(storagePath, pdfBlob, {
+            contentType: "application/pdf",
+            upsert: true
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("library-files")
+          .getPublicUrl(storagePath);
+
+        const { error: dbError } = await supabase
+          .from("library_files")
+          .insert({
+            user_id: userId,
+            subject_id: subjectId,
+            nombre: `${documentTitle || "Apunte"}.pdf`,
+            tipo: "pdf",
+            url: urlData.publicUrl,
+            storage_path: storagePath,
+            tamaño_bytes: pdfBlob.size
+          });
+
+        if (dbError) throw dbError;
+
+        toast.success("PDF guardado en la Biblioteca");
+      } else {
+        await html2pdf().set(opt).from(container).save();
+        toast.success("PDF descargado");
+      }
+
+      document.body.removeChild(container);
+      onExported?.();
+
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast.error("Error al exportar el PDF");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      {subjectId && (
+        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={saveToLibrary}
+            onChange={(e) => setSaveToLibrary(e.target.checked)}
+            className="w-4 h-4 rounded border-border bg-secondary accent-primary"
+          />
+          <Library className="w-4 h-4" />
+          <span className="hidden sm:inline">Guardar en Biblioteca</span>
+        </label>
+      )}
+      
+      <button
+        onClick={exportToPDF}
+        disabled={exporting}
+        className="flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-secondary/80 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+      >
+        {exporting ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Exportando...
+          </>
+        ) : (
+          <>
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Exportar PDF</span>
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
