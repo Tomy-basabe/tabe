@@ -47,6 +47,7 @@ import { Callout } from "./extensions/CalloutExtension";
 import { Details, DetailsSummary, DetailsContent } from "./extensions/DetailsExtension";
 import { DragHandle } from "./extensions/DragHandle";
 import { TextStyle, Color, BackgroundColor } from "./extensions/ColorExtension";
+import { Embed } from "./extensions/EmbedExtension";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp";
 import { ColorPicker } from "./ColorPicker";
 import "tippy.js/dist/tippy.css";
@@ -164,6 +165,7 @@ export function AdvancedNotionEditor({
       Details,
       DetailsSummary,
       DetailsContent,
+      Embed,
       DragHandle,
       SlashCommands,
     ],
@@ -1021,6 +1023,82 @@ export function AdvancedNotionEditor({
         .notion-editor-content [style*="background-color"] {
           padding: 0 0.2em;
           border-radius: 0.25rem;
+        }
+
+        /* Embeds */
+        .embed-container {
+          margin: 1rem 0;
+          border-radius: 0.5rem;
+          overflow: hidden;
+          background: hsl(var(--secondary));
+          position: relative;
+        }
+
+        .embed-container iframe {
+          display: block;
+          border: none;
+        }
+
+        .embed-youtube,
+        .embed-vimeo,
+        .embed-loom {
+          aspect-ratio: 16/9;
+        }
+
+        .embed-spotify {
+          aspect-ratio: 80/21;
+          min-height: 80px;
+        }
+
+        .embed-figma {
+          aspect-ratio: 4/3;
+          min-height: 400px;
+        }
+
+        .embed-codepen {
+          aspect-ratio: 16/9;
+          min-height: 300px;
+        }
+
+        .embed-twitter {
+          padding: 1rem;
+          background: hsl(var(--card));
+          border: 1px solid hsl(var(--border));
+        }
+
+        .embed-twitter blockquote {
+          margin: 0;
+          font-style: normal;
+          border-left: none;
+          padding-left: 0;
+        }
+
+        .embed-twitter a {
+          color: hsl(var(--primary));
+          text-decoration: none;
+        }
+
+        .embed-twitter a:hover {
+          text-decoration: underline;
+        }
+
+        .embed-generic {
+          aspect-ratio: 16/9;
+          min-height: 300px;
+        }
+
+        /* Draggable embeds */
+        .embed-container[draggable="true"] {
+          cursor: grab;
+        }
+
+        .embed-container:hover::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: hsl(var(--primary) / 0.05);
+          pointer-events: none;
+          border-radius: inherit;
         }
       `}</style>
     </div>

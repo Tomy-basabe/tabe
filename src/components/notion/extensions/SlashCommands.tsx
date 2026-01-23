@@ -26,6 +26,11 @@ import {
   Sparkles,
   Palette,
   PaintBucket,
+  Youtube,
+  Twitter,
+  Music,
+  Video,
+  ExternalLink,
 } from "lucide-react";
 import {
   NOTION_TEXT_COLORS,
@@ -229,6 +234,67 @@ const getSuggestionItems = (): CommandItem[] => [
     category: "Media",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    },
+  },
+  // Embeds
+  {
+    title: "YouTube",
+    description: "Insertar video de YouTube",
+    icon: <Youtube className="w-4 h-4 text-red-500" />,
+    category: "Embeds",
+    command: ({ editor, range }) => {
+      const url = window.prompt("URL del video de YouTube:");
+      if (url) {
+        editor.chain().focus().deleteRange(range).setEmbed({ src: url }).run();
+      }
+    },
+  },
+  {
+    title: "Twitter / X",
+    description: "Insertar tweet",
+    icon: <Twitter className="w-4 h-4 text-blue-400" />,
+    category: "Embeds",
+    command: ({ editor, range }) => {
+      const url = window.prompt("URL del tweet:");
+      if (url) {
+        editor.chain().focus().deleteRange(range).setEmbed({ src: url }).run();
+      }
+    },
+  },
+  {
+    title: "Vimeo",
+    description: "Insertar video de Vimeo",
+    icon: <Video className="w-4 h-4 text-cyan-500" />,
+    category: "Embeds",
+    command: ({ editor, range }) => {
+      const url = window.prompt("URL del video de Vimeo:");
+      if (url) {
+        editor.chain().focus().deleteRange(range).setEmbed({ src: url }).run();
+      }
+    },
+  },
+  {
+    title: "Spotify",
+    description: "Insertar canción o playlist",
+    icon: <Music className="w-4 h-4 text-green-500" />,
+    category: "Embeds",
+    command: ({ editor, range }) => {
+      const url = window.prompt("URL de Spotify (canción o playlist):");
+      if (url) {
+        editor.chain().focus().deleteRange(range).setEmbed({ src: url }).run();
+      }
+    },
+  },
+  {
+    title: "Embed",
+    description: "Insertar cualquier contenido embebido",
+    icon: <ExternalLink className="w-4 h-4" />,
+    category: "Embeds",
+    command: ({ editor, range }) => {
+      const url = window.prompt("URL para embeber (YouTube, Vimeo, Spotify, Figma, Loom, CodePen, etc.):");
+      if (url) {
+        editor.chain().focus().deleteRange(range).setEmbed({ src: url }).run();
+      }
     },
   },
 ];
