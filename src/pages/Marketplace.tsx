@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Store, Search, Download, Star, User, Tag, Eye, ChevronLeft, ChevronRight, Layers, Upload, X } from "lucide-react";
+import { Store, Search, Download, Star, User, Tag, Eye, ChevronLeft, ChevronRight, Layers, Upload, X, GraduationCap, Calendar } from "lucide-react";
 import { useMarketplace } from "@/hooks/useMarketplace";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,10 @@ export default function Marketplace() {
     setSearchTerm,
     categoryFilter,
     setCategoryFilter,
+    yearFilter,
+    setYearFilter,
+    subjectFilter,
+    setSubjectFilter,
     getCategories,
     publishDeck,
     unpublishDeck,
@@ -39,7 +43,7 @@ export default function Marketplace() {
 
   const [categories, setCategories] = useState<string[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [myDecks, setMyDecks] = useState<Array<{ id: string; nombre: string; total_cards: number; is_public: boolean }>>([]);
+  const [myDecks, setMyDecks] = useState<Array<{ id: string; nombre: string; total_cards: number; is_public: boolean; subject_id: string }>>([]);
   
   // Preview Modal State
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -82,7 +86,7 @@ export default function Marketplace() {
       if (user) {
         const { data: decksData } = await supabase
           .from("flashcard_decks")
-          .select("id, nombre, total_cards, is_public")
+          .select("id, nombre, total_cards, is_public, subject_id")
           .eq("user_id", user.id)
           .gt("total_cards", 0);
         setMyDecks(decksData || []);
@@ -132,7 +136,7 @@ export default function Marketplace() {
       // Refresh my decks
       const { data } = await supabase
         .from("flashcard_decks")
-        .select("id, nombre, total_cards, is_public")
+        .select("id, nombre, total_cards, is_public, subject_id")
         .eq("user_id", user?.id)
         .gt("total_cards", 0);
       setMyDecks(data || []);
@@ -145,11 +149,19 @@ export default function Marketplace() {
     // Refresh my decks
     const { data } = await supabase
       .from("flashcard_decks")
-      .select("id, nombre, total_cards, is_public")
+      .select("id, nombre, total_cards, is_public, subject_id")
       .eq("user_id", user?.id)
       .gt("total_cards", 0);
     setMyDecks(data || []);
   };
+
+  // Get subject info by id
+  const getSubjectInfo = (subjectId: string) => {
+    return subjects.find(s => s.id === subjectId);
+  };
+
+  // Get available years from subjects
+  const availableYears = [...new Set(subjects.map(s => s.año))].sort();
 
   const getAverageRating = (deck: typeof publicDecks[0]) => {
     if (deck.rating_count === 0) return 0;
@@ -201,28 +213,86 @@ export default function Marketplace() {
 
         {/* Explore Tab */}
         <TabsContent value="explore" className="space-y-4">
-          {/* Search & Filters */}
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar mazos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        {/* Search & Filters */}
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar mazos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={categoryFilter || "all"} onValueChange={(v) => setCategoryFilter(v === "all" ? null : v)}>
+                <SelectTrigger className="w-full md:w-48">
+                  <SelectValue placeholder="Categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las categorías</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={categoryFilter || "all"} onValueChange={(v) => setCategoryFilter(v === "all" ? null : v)}>
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Categoría" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las categorías</SelectItem>
-                {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            
+            {/* Year and Subject Filters */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <Select value={yearFilter?.toString() || "all"} onValueChange={(v) => {
+                setYearFilter(v === "all" ? null : parseInt(v));
+                setSubjectFilter(null); // Reset subject when year changes
+              }}>
+                <SelectTrigger className="w-full md:w-48">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Año" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los años</SelectItem>
+                  {availableYears.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>Año {year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select 
+                value={subjectFilter || "all"} 
+                onValueChange={(v) => setSubjectFilter(v === "all" ? null : v)}
+              >
+                <SelectTrigger className="w-full md:w-64">
+                  <GraduationCap className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Materia" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las materias</SelectItem>
+                  {subjects
+                    .filter(s => !yearFilter || s.año === yearFilter)
+                    .map((subject) => (
+                      <SelectItem key={subject.id} value={subject.id}>
+                        {subject.nombre}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+
+              {/* Clear filters button */}
+              {(yearFilter || subjectFilter || categoryFilter) && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {
+                    setYearFilter(null);
+                    setSubjectFilter(null);
+                    setCategoryFilter(null);
+                  }}
+                  className="w-full md:w-auto"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Limpiar filtros
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Decks Grid */}
@@ -266,17 +336,24 @@ export default function Marketplace() {
                       </p>
                     )}
 
-                    {/* Tags */}
+                    {/* Subject & Year Tags */}
                     <div className="flex flex-wrap gap-2 mb-3">
+                      {deck.subject && (
+                        <>
+                          <Badge variant="outline" className="text-xs bg-primary/10">
+                            <Calendar className="w-3 h-3 mr-1" />
+                            Año {deck.subject.year}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs bg-secondary">
+                            <GraduationCap className="w-3 h-3 mr-1" />
+                            {deck.subject.nombre}
+                          </Badge>
+                        </>
+                      )}
                       {deck.category && (
                         <Badge variant="secondary" className="text-xs">
                           <Tag className="w-3 h-3 mr-1" />
                           {deck.category}
-                        </Badge>
-                      )}
-                      {deck.subject && (
-                        <Badge variant="outline" className="text-xs">
-                          Año {deck.subject.year}
                         </Badge>
                       )}
                     </div>
@@ -348,24 +425,34 @@ export default function Marketplace() {
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {myDecks.filter(d => !d.is_public).map((deck) => (
-                    <div key={deck.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                      <div>
-                        <p className="font-medium">{deck.nombre}</p>
-                        <p className="text-sm text-muted-foreground">{deck.total_cards} tarjetas</p>
+                  {myDecks.filter(d => !d.is_public).map((deck) => {
+                    const subjectInfo = getSubjectInfo(deck.subject_id);
+                    return (
+                      <div key={deck.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
+                        <div className="flex-1">
+                          <p className="font-medium">{deck.nombre}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-sm text-muted-foreground">{deck.total_cards} tarjetas</p>
+                            {subjectInfo && (
+                              <Badge variant="outline" className="text-xs">
+                                Año {subjectInfo.año} · {subjectInfo.nombre}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setPublishDeckId(deck.id);
+                            setPublishOpen(true);
+                          }}
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Publicar
+                        </Button>
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setPublishDeckId(deck.id);
-                          setPublishOpen(true);
-                        }}
-                      >
-                        <Upload className="w-4 h-4 mr-2" />
-                        Publicar
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -378,23 +465,33 @@ export default function Marketplace() {
                 <CardTitle className="text-lg">Mis Mazos Publicados</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {myDecks.filter(d => d.is_public).map((deck) => (
-                  <div key={deck.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                    <div>
-                      <p className="font-medium">{deck.nombre}</p>
-                      <p className="text-sm text-muted-foreground">{deck.total_cards} tarjetas</p>
+                {myDecks.filter(d => d.is_public).map((deck) => {
+                  const subjectInfo = getSubjectInfo(deck.subject_id);
+                  return (
+                    <div key={deck.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
+                      <div className="flex-1">
+                        <p className="font-medium">{deck.nombre}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-sm text-muted-foreground">{deck.total_cards} tarjetas</p>
+                          {subjectInfo && (
+                            <Badge variant="outline" className="text-xs">
+                              Año {subjectInfo.año} · {subjectInfo.nombre}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive"
+                        onClick={() => handleUnpublish(deck.id)}
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Retirar
+                      </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-destructive"
-                      onClick={() => handleUnpublish(deck.id)}
-                    >
-                      <X className="w-4 h-4 mr-2" />
-                      Retirar
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           )}

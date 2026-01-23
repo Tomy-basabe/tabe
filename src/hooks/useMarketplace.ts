@@ -53,6 +53,8 @@ export function useMarketplace() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [yearFilter, setYearFilter] = useState<number | null>(null);
+  const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
 
   const fetchPublicDecks = useCallback(async () => {
     setLoading(true);
@@ -119,18 +121,28 @@ export function useMarketplace() {
       };
     });
 
-    // Filter by search term
-    const filtered = searchTerm
-      ? enrichedDecks.filter(d => 
-          d.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          d.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          d.subject?.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      : enrichedDecks;
+    // Filter by search term, year and subject
+    let filtered = enrichedDecks;
+
+    if (searchTerm) {
+      filtered = filtered.filter(d => 
+        d.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        d.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        d.subject?.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (yearFilter) {
+      filtered = filtered.filter(d => d.subject?.year === yearFilter);
+    }
+
+    if (subjectFilter) {
+      filtered = filtered.filter(d => d.subject_id === subjectFilter);
+    }
 
     setPublicDecks(filtered);
     setLoading(false);
-  }, [categoryFilter, searchTerm]);
+  }, [categoryFilter, searchTerm, yearFilter, subjectFilter]);
 
   const fetchMyPublicDecks = useCallback(async () => {
     if (!user) return;
@@ -311,6 +323,10 @@ export function useMarketplace() {
     setSearchTerm,
     categoryFilter,
     setCategoryFilter,
+    yearFilter,
+    setYearFilter,
+    subjectFilter,
+    setSubjectFilter,
     getCategories,
     publishDeck,
     unpublishDeck,
