@@ -97,7 +97,7 @@ Para texto con formato dentro de content:
 Extrae todo el contenido del documento manteniendo la estructura original (títulos, párrafos, listas, etc).
 Responde SOLO con el JSON, sin explicaciones ni markdown.`;
 
-    const aiResponse = await fetch("https://api.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${lovableApiKey}`,
