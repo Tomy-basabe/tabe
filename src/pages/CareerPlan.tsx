@@ -20,7 +20,8 @@ export default function CareerPlan() {
     subjects, 
     rawSubjects,
     loading, 
-    updateSubjectStatus, 
+    updateSubjectStatus,
+    updatePartialGrades,
     createSubject,
     updateSubjectDependencies,
     deleteSubject,
@@ -279,6 +280,7 @@ export default function CareerPlan() {
           setSelectedSubject(null);
         }}
         onUpdate={updateSubjectStatus}
+        onUpdatePartialGrades={updatePartialGrades}
         onEditDependencies={handleEditDependencies}
         onDelete={deleteSubject}
       />

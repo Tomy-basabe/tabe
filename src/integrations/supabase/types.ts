@@ -720,6 +720,13 @@ export type Database = {
           fecha_aprobacion: string | null
           id: string
           nota: number | null
+          nota_final_examen: number | null
+          nota_global: number | null
+          nota_parcial_1: number | null
+          nota_parcial_2: number | null
+          nota_rec_global: number | null
+          nota_rec_parcial_1: number | null
+          nota_rec_parcial_2: number | null
           subject_id: string
           updated_at: string
           user_id: string
@@ -730,6 +737,13 @@ export type Database = {
           fecha_aprobacion?: string | null
           id?: string
           nota?: number | null
+          nota_final_examen?: number | null
+          nota_global?: number | null
+          nota_parcial_1?: number | null
+          nota_parcial_2?: number | null
+          nota_rec_global?: number | null
+          nota_rec_parcial_1?: number | null
+          nota_rec_parcial_2?: number | null
           subject_id: string
           updated_at?: string
           user_id: string
@@ -740,6 +754,13 @@ export type Database = {
           fecha_aprobacion?: string | null
           id?: string
           nota?: number | null
+          nota_final_examen?: number | null
+          nota_global?: number | null
+          nota_parcial_1?: number | null
+          nota_parcial_2?: number | null
+          nota_rec_global?: number | null
+          nota_rec_parcial_1?: number | null
+          nota_rec_parcial_2?: number | null
           subject_id?: string
           updated_at?: string
           user_id?: string

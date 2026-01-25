@@ -40,12 +40,29 @@ export interface Subject {
   numero_materia: number;
 }
 
+export interface PartialGrades {
+  nota_parcial_1?: number | null;
+  nota_rec_parcial_1?: number | null;
+  nota_parcial_2?: number | null;
+  nota_rec_parcial_2?: number | null;
+  nota_global?: number | null;
+  nota_rec_global?: number | null;
+  nota_final_examen?: number | null;
+}
+
 export interface UserSubjectStatus {
   id: string;
   subject_id: string;
   estado: SubjectStatus;
   nota: number | null;
   fecha_aprobacion: string | null;
+  nota_parcial_1?: number | null;
+  nota_rec_parcial_1?: number | null;
+  nota_parcial_2?: number | null;
+  nota_rec_parcial_2?: number | null;
+  nota_global?: number | null;
+  nota_rec_global?: number | null;
+  nota_final_examen?: number | null;
 }
 
 export interface Dependency {
@@ -61,6 +78,8 @@ export interface SubjectWithStatus extends Subject {
   fecha_aprobacion: string | null;
   requisitos_faltantes: string[];
   dependencies: Dependency[];
+  partialGrades: PartialGrades;
+  userStatusId?: string;
 }
 
 export interface CreateSubjectData {
@@ -201,6 +220,16 @@ export function useSubjects() {
         fecha_aprobacion: userStatus?.fecha_aprobacion ?? null,
         requisitos_faltantes: status === "bloqueada" ? getMissingRequirements(subject.id) : [],
         dependencies: subjectDeps,
+        userStatusId: userStatus?.id,
+        partialGrades: {
+          nota_parcial_1: userStatus?.nota_parcial_1 ?? null,
+          nota_rec_parcial_1: userStatus?.nota_rec_parcial_1 ?? null,
+          nota_parcial_2: userStatus?.nota_parcial_2 ?? null,
+          nota_rec_parcial_2: userStatus?.nota_rec_parcial_2 ?? null,
+          nota_global: userStatus?.nota_global ?? null,
+          nota_rec_global: userStatus?.nota_rec_global ?? null,
+          nota_final_examen: userStatus?.nota_final_examen ?? null,
+        },
       };
     });
   }, [subjects, userStatuses, dependencies, getSubjectStatus, getMissingRequirements]);
@@ -432,6 +461,54 @@ export function useSubjects() {
     }
   };
 
+  const updatePartialGrades = async (subjectId: string, grades: PartialGrades) => {
+    if (!user) return;
+
+    try {
+      const existingStatus = userStatuses.find(s => s.subject_id === subjectId);
+      
+      if (existingStatus) {
+        const { error } = await supabase
+          .from("user_subject_status")
+          .update({
+            nota_parcial_1: grades.nota_parcial_1,
+            nota_rec_parcial_1: grades.nota_rec_parcial_1,
+            nota_parcial_2: grades.nota_parcial_2,
+            nota_rec_parcial_2: grades.nota_rec_parcial_2,
+            nota_global: grades.nota_global,
+            nota_rec_global: grades.nota_rec_global,
+            nota_final_examen: grades.nota_final_examen,
+          })
+          .eq("id", existingStatus.id);
+        
+        if (error) throw error;
+      } else {
+        // Create a new status record with partial grades
+        const { error } = await supabase
+          .from("user_subject_status")
+          .insert({
+            user_id: user.id,
+            subject_id: subjectId,
+            estado: "cursable",
+            nota_parcial_1: grades.nota_parcial_1,
+            nota_rec_parcial_1: grades.nota_rec_parcial_1,
+            nota_parcial_2: grades.nota_parcial_2,
+            nota_rec_parcial_2: grades.nota_rec_parcial_2,
+            nota_global: grades.nota_global,
+            nota_rec_global: grades.nota_rec_global,
+            nota_final_examen: grades.nota_final_examen,
+          });
+        
+        if (error) throw error;
+      }
+
+      await fetchData();
+    } catch (error) {
+      console.error("Error updating partial grades:", error);
+      toast.error("Error al actualizar las notas parciales");
+    }
+  };
+
   const getYears = useCallback((): number[] => {
     const years = [...new Set(subjects.map(s => s.año))].sort((a, b) => a - b);
     return years.length > 0 ? years : [1, 2, 3, 4, 5];
@@ -486,6 +563,7 @@ export function useSubjects() {
     dependencies,
     loading,
     updateSubjectStatus,
+    updatePartialGrades,
     createSubject,
     updateSubjectDependencies,
     deleteSubject,

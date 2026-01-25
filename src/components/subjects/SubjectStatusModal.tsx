@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { SubjectWithStatus, SubjectStatus } from "@/hooks/useSubjects";
+import { SubjectWithStatus, SubjectStatus, PartialGrades } from "@/hooks/useSubjects";
 import { CheckCircle2, Clock, BookOpen, Lock, RotateCcw, Trophy, Star, Link2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PartialGradesSection } from "./PartialGradesSection";
 
 interface SubjectStatusModalProps {
   subject: SubjectWithStatus | null;
   open: boolean;
   onClose: () => void;
   onUpdate: (subjectId: string, status: SubjectStatus, nota?: number) => Promise<void>;
+  onUpdatePartialGrades?: (subjectId: string, grades: PartialGrades) => Promise<void>;
   onEditDependencies?: (subject: SubjectWithStatus) => void;
   onDelete?: (subjectId: string) => Promise<void>;
 }
@@ -48,7 +50,8 @@ export function SubjectStatusModal({
   subject, 
   open, 
   onClose, 
-  onUpdate, 
+  onUpdate,
+  onUpdatePartialGrades,
   onEditDependencies,
   onDelete 
 }: SubjectStatusModalProps) {
@@ -56,6 +59,7 @@ export function SubjectStatusModal({
   const [nota, setNota] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [partialGrades, setPartialGrades] = useState<PartialGrades>(subject?.partialGrades || {});
 
   if (!subject) return null;
 
@@ -171,11 +175,23 @@ export function SubjectStatusModal({
           </div>
         ) : (
           <div className="py-4 space-y-4">
+            {/* Partial Grades Section */}
+            {onUpdatePartialGrades && (
+              <PartialGradesSection
+                grades={partialGrades}
+                onUpdate={(newGrades) => {
+                  setPartialGrades(newGrades);
+                  onUpdatePartialGrades(subject.id, newGrades);
+                }}
+                disabled={loading}
+              />
+            )}
+
             {/* Current Status */}
             {subject.nota && (
               <div className="flex items-center justify-center gap-2 p-3 bg-neon-gold/10 rounded-xl border border-neon-gold/30">
                 <Star className="w-5 h-5 text-neon-gold" />
-                <span className="text-neon-gold font-medium">Nota actual: {subject.nota}</span>
+                <span className="text-neon-gold font-medium">Nota final materia: {subject.nota}</span>
               </div>
             )}
 
