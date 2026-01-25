@@ -122,6 +122,15 @@ export default function AIAssistant() {
         });
       }
 
+      if (data.flashcards_created) {
+        toast.success(`¡${data.flashcards_created.cards_count} flashcards creadas!`, {
+          action: {
+            label: "Ver mazos",
+            onClick: () => window.location.href = "/flashcards",
+          },
+        });
+      }
+
     } catch (error) {
       console.error("AI error:", error);
       const errorMessage = error instanceof Error ? error.message : "Error desconocido";

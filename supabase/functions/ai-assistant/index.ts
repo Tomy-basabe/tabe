@@ -264,12 +264,22 @@ CAPACIDADES:
 3. Puedo crear planes de estudio personalizados
 4. Puedo agendar eventos en el calendario del usuario
 5. Puedo analizar el progreso académico y dar recomendaciones
+6. Puedo GENERAR FLASHCARDS automáticamente sobre temas que explico
 
 INSTRUCCIONES PARA AGENDAR EVENTOS:
 Cuando el usuario quiera agendar algo, usá la herramienta "create_calendar_event".
 - Inferí la fecha según contexto ("el viernes" = próximo viernes)
 - Tipos válidos: P1, P2, Global, Final, Recuperatorio P1/P2/Global, Estudio
 - Si menciona una materia, usá su ID de la lista
+
+INSTRUCCIONES PARA GENERAR FLASHCARDS:
+- Cuando termines de explicar un tema, SIEMPRE preguntá: "¿Querés que te genere flashcards sobre este tema para repasar?"
+- Si el usuario acepta, usá la herramienta "create_flashcards"
+- Generá entre 5 y 15 flashcards dependiendo de la complejidad del tema
+- Las preguntas deben ser claras y concisas
+- Las respuestas deben ser completas pero no excesivamente largas
+- Incluí variedad: definiciones, ejemplos, comparaciones, aplicaciones
+- Si el usuario menciona una materia, asociá el mazo a esa materia
 
 Respondé siempre en español argentino. Adaptá tu tono según tu personalidad asignada.`;
 
@@ -321,6 +331,50 @@ Respondé siempre en español argentino. Adaptá tu tono según tu personalidad 
                   }
                 },
                 required: ["titulo", "fecha", "tipo_examen"],
+                additionalProperties: false
+              }
+            }
+          },
+          {
+            type: "function",
+            function: {
+              name: "create_flashcards",
+              description: "Genera un mazo de flashcards sobre un tema específico. Úsalo SOLO cuando el usuario CONFIRME que quiere las flashcards después de que le preguntaste.",
+              parameters: {
+                type: "object",
+                properties: {
+                  deck_name: {
+                    type: "string",
+                    description: "Nombre del mazo (ej: 'Derivadas - Reglas básicas')"
+                  },
+                  description: {
+                    type: "string",
+                    description: "Descripción breve del contenido del mazo"
+                  },
+                  subject_id: {
+                    type: "string",
+                    description: "ID de la materia asociada (usar los IDs de la lista de materias si corresponde)"
+                  },
+                  cards: {
+                    type: "array",
+                    description: "Array de flashcards con pregunta y respuesta",
+                    items: {
+                      type: "object",
+                      properties: {
+                        pregunta: {
+                          type: "string",
+                          description: "La pregunta o concepto a memorizar"
+                        },
+                        respuesta: {
+                          type: "string",
+                          description: "La respuesta o explicación"
+                        }
+                      },
+                      required: ["pregunta", "respuesta"]
+                    }
+                  }
+                },
+                required: ["deck_name", "cards"],
                 additionalProperties: false
               }
             }
@@ -386,7 +440,8 @@ Respondé siempre en español argentino. Adaptá tu tono según tu personalidad 
           console.error("Error creating event:", insertError);
           return new Response(JSON.stringify({ 
             content: `Hubo un error al crear el evento: ${insertError.message}`,
-            event_created: null 
+            event_created: null,
+            flashcards_created: null,
           }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -406,7 +461,92 @@ Respondé siempre en español argentino. Adaptá tu tono según tu personalidad 
 
         return new Response(JSON.stringify({ 
           content: confirmationMessage,
-          event_created: newEvent 
+          event_created: newEvent,
+          flashcards_created: null,
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (toolCall.function.name === "create_flashcards") {
+        const flashcardData = JSON.parse(toolCall.function.arguments) as {
+          deck_name: string;
+          description?: string;
+          subject_id?: string;
+          cards: Array<{ pregunta: string; respuesta: string }>;
+        };
+        
+        // First, create the deck
+        const { data: newDeck, error: deckError } = await supabase
+          .from("flashcard_decks")
+          .insert({
+            user_id: userId,
+            nombre: flashcardData.deck_name,
+            description: flashcardData.description || null,
+            subject_id: flashcardData.subject_id || subjects?.[0]?.id || null,
+            total_cards: flashcardData.cards.length,
+            is_public: false,
+          })
+          .select()
+          .single();
+
+        if (deckError) {
+          console.error("Error creating deck:", deckError);
+          return new Response(JSON.stringify({ 
+            content: `Hubo un error al crear el mazo: ${deckError.message}`,
+            event_created: null,
+            flashcards_created: null,
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Then, create all the flashcards
+        const flashcardsToInsert = flashcardData.cards.map(card => ({
+          deck_id: newDeck.id,
+          user_id: userId,
+          pregunta: card.pregunta,
+          respuesta: card.respuesta,
+          veces_correcta: 0,
+          veces_incorrecta: 0,
+        }));
+
+        const { error: cardsError } = await supabase
+          .from("flashcards")
+          .insert(flashcardsToInsert);
+
+        if (cardsError) {
+          console.error("Error creating flashcards:", cardsError);
+          // Cleanup: delete the deck if cards failed
+          await supabase.from("flashcard_decks").delete().eq("id", newDeck.id);
+          return new Response(JSON.stringify({ 
+            content: `Hubo un error al crear las flashcards: ${cardsError.message}`,
+            event_created: null,
+            flashcards_created: null,
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Build confirmation message with sample cards
+        const sampleCards = flashcardData.cards.slice(0, 3);
+        let cardsList = sampleCards.map((c, i) => 
+          `${i + 1}. **${c.pregunta}**\n   → ${c.respuesta}`
+        ).join("\n\n");
+        
+        if (flashcardData.cards.length > 3) {
+          cardsList += `\n\n... y ${flashcardData.cards.length - 3} más`;
+        }
+
+        const confirmationMessage = `🃏 **¡Mazo de flashcards creado!**\n\n📚 **${flashcardData.deck_name}**\n📝 ${flashcardData.cards.length} tarjetas generadas\n\n**Vista previa:**\n${cardsList}\n\n¡Podés encontrar tu mazo en la sección de Flashcards para empezar a estudiar!`;
+
+        return new Response(JSON.stringify({ 
+          content: confirmationMessage,
+          event_created: null,
+          flashcards_created: {
+            deck: newDeck,
+            cards_count: flashcardData.cards.length,
+          },
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
