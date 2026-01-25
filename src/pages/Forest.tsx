@@ -11,7 +11,8 @@ import {
   Trash2,
   Calendar,
   TrendingUp,
-  Loader2
+  Loader2,
+  XCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -218,6 +219,7 @@ export default function Forest() {
     loading, 
     plantNewTree,
     removeDeadPlant,
+    abandonPlant,
     plantTypes 
   } = useForest();
 
@@ -412,6 +414,20 @@ export default function Forest() {
                 >
                   <Plus className="w-4 h-4" />
                   Plantar nuevo árbol
+                </Button>
+              </div>
+            )}
+
+            {currentPlant && currentPlant.is_alive && !currentPlant.is_completed && (
+              <div className="mt-6 flex justify-center">
+                <Button 
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => abandonPlant(currentPlant.id)}
+                  className="gap-2 text-destructive hover:bg-destructive/10"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Abandonar planta
                 </Button>
               </div>
             )}

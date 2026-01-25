@@ -310,6 +310,7 @@ export function useForest() {
     loading,
     plantNewTree,
     removeDeadPlant,
+    abandonPlant,
     plantTypes: PLANT_TYPES,
     refetch: fetchPlants,
   };
