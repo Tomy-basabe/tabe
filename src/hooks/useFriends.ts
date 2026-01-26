@@ -205,21 +205,15 @@ export function useFriends() {
   const sendFriendRequest = async (identifier: string) => {
     if (!user) return { error: "No autenticado" };
 
-    // Try to find user by display_id or username
-    let query = supabase.from("profiles").select("user_id, username, display_id");
-    
-    const numericId = parseInt(identifier);
-    if (!isNaN(numericId)) {
-      query = query.eq("display_id", numericId);
-    } else {
-      query = query.ilike("username", identifier);
-    }
+    // Use secure RPC function to find user by display_id or username
+    const { data: users, error: findError } = await supabase
+      .rpc('find_user_for_friend_request', { identifier: identifier.trim() });
 
-    const { data: targetUser, error: findError } = await query.single();
-
-    if (findError || !targetUser) {
+    if (findError || !users || users.length === 0) {
       return { error: "Usuario no encontrado" };
     }
+
+    const targetUser = users[0];
 
     if (targetUser.user_id === user.id) {
       return { error: "No puedes agregarte a ti mismo" };

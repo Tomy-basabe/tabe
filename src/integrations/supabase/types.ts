@@ -900,6 +900,14 @@ export type Database = {
           id: string
         }[]
       }
+      find_user_for_friend_request: {
+        Args: { identifier: string }
+        Returns: {
+          display_id: number
+          user_id: string
+          username: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
