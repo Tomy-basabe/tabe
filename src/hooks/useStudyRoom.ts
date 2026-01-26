@@ -40,6 +40,7 @@ export interface Subject {
   id: string;
   nombre: string;
   codigo: string;
+  año?: number;
 }
 
 export function useStudyRoom() {
@@ -59,8 +60,25 @@ export function useStudyRoom() {
       const { data } = await supabase
         .from("subjects")
         .select("id, nombre, codigo")
-        .order("año", { ascending: true });
-      if (data) setSubjects(data);
+        .order("numero_materia", { ascending: true });
+      
+      // Fetch año separately due to special character
+      if (data) {
+        const { data: fullData } = await supabase
+          .from("subjects")
+          .select("*")
+          .order("numero_materia", { ascending: true });
+        
+        if (fullData) {
+          const subjectsWithYear = data.map((s, idx) => ({
+            ...s,
+            año: fullData[idx]?.año
+          }));
+          setSubjects(subjectsWithYear);
+        } else {
+          setSubjects(data as Subject[]);
+        }
+      }
     };
     fetchSubjects();
   }, []);

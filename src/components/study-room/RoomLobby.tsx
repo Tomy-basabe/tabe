@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,9 +37,28 @@ export function RoomLobby({
   onJoinRoom,
 }: RoomLobbyProps) {
   const [roomName, setRoomName] = useState("");
+  const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [joiningRoomId, setJoiningRoomId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Get unique years from subjects
+  const years = useMemo(() => {
+    const uniqueYears = [...new Set(subjects.map(s => (s as any).año).filter(Boolean))];
+    return uniqueYears.sort((a, b) => a - b);
+  }, [subjects]);
+
+  // Filter subjects by selected year
+  const filteredSubjects = useMemo(() => {
+    if (selectedYear === "all") return subjects;
+    return subjects.filter(s => (s as any).año === parseInt(selectedYear));
+  }, [subjects, selectedYear]);
+
+  // Reset subject when year changes
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    setSelectedSubject("");
+  };
 
   const handleCreateRoom = async () => {
     if (!roomName.trim()) return;
@@ -73,7 +92,7 @@ export function RoomLobby({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="room-name">Nombre de la sala</Label>
               <Input
@@ -85,14 +104,30 @@ export function RoomLobby({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="subject">Materia (opcional)</Label>
+              <Label htmlFor="year">Año</Label>
+              <Select value={selectedYear} onValueChange={handleYearChange}>
+                <SelectTrigger className="bg-secondary/50">
+                  <SelectValue placeholder="Todos los años" />
+                </SelectTrigger>
+                <SelectContent className="bg-card">
+                  <SelectItem value="all">Todos los años</SelectItem>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}° Año
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subject">Materia</Label>
               <Select value={selectedSubject} onValueChange={setSelectedSubject}>
                 <SelectTrigger className="bg-secondary/50">
                   <SelectValue placeholder="Selecciona una materia" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-card max-h-60">
                   <SelectItem value="none">Sin materia específica</SelectItem>
-                  {subjects.map((subject) => (
+                  {filteredSubjects.map((subject) => (
                     <SelectItem key={subject.id} value={subject.id}>
                       {subject.codigo} - {subject.nombre}
                     </SelectItem>
