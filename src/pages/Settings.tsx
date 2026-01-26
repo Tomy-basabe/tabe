@@ -4,9 +4,47 @@ import { useAuth } from "@/contexts/AuthContext";
 import { NotificationSettings } from "@/components/notifications/NotificationSettings";
 import { useTheme } from "@/hooks/useTheme";
 
+const STORAGE_KEY = "pomodoro-settings";
+
+interface PomodoroSettingsType {
+  work: number;
+  shortBreak: number;
+  longBreak: number;
+  longBreakInterval: number;
+}
+
+const defaultSettings: PomodoroSettingsType = {
+  work: 25,
+  shortBreak: 5,
+  longBreak: 15,
+  longBreakInterval: 4,
+};
+
+const loadSettings = (): PomodoroSettingsType => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return { ...defaultSettings, ...parsed };
+    }
+  } catch {
+    // Fallback to defaults
+  }
+  return defaultSettings;
+};
+
+const saveSettings = (settings: PomodoroSettingsType): void => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // Storage not available
+  }
+};
+
 export default function Settings() {
   const { user, signOut } = useAuth();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [pomodoroSettings, setPomodoroSettings] = useState<PomodoroSettingsType>(loadSettings);
   const { theme, toggleTheme } = useTheme();
   
   const userName = user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Usuario";
@@ -19,6 +57,24 @@ export default function Settings() {
 
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
+  };
+
+  const updatePomodoroSetting = (key: keyof PomodoroSettingsType, delta: number) => {
+    const limits: Record<keyof PomodoroSettingsType, { min: number; max: number }> = {
+      work: { min: 5, max: 60 },
+      shortBreak: { min: 1, max: 15 },
+      longBreak: { min: 5, max: 30 },
+      longBreakInterval: { min: 2, max: 8 },
+    };
+
+    const newValue = Math.max(
+      limits[key].min,
+      Math.min(limits[key].max, pomodoroSettings[key] + delta)
+    );
+
+    const newSettings = { ...pomodoroSettings, [key]: newValue };
+    setPomodoroSettings(newSettings);
+    saveSettings(newSettings);
   };
 
   return (
@@ -150,27 +206,57 @@ export default function Settings() {
           <div className="flex items-center justify-between">
             <span className="text-sm">Tiempo de trabajo</span>
             <div className="flex items-center gap-2">
-              <button className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80">-</button>
-              <span className="font-display font-bold w-12 text-center">25</span>
-              <button className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80">+</button>
+              <button 
+                onClick={() => updatePomodoroSetting("work", -1)}
+                className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/20 hover:text-primary transition-all active:scale-95"
+              >
+                -
+              </button>
+              <span className="font-display font-bold w-12 text-center text-neon-cyan">{pomodoroSettings.work}</span>
+              <button 
+                onClick={() => updatePomodoroSetting("work", 1)}
+                className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/20 hover:text-primary transition-all active:scale-95"
+              >
+                +
+              </button>
               <span className="text-sm text-muted-foreground">min</span>
             </div>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm">Descanso corto</span>
             <div className="flex items-center gap-2">
-              <button className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80">-</button>
-              <span className="font-display font-bold w-12 text-center">5</span>
-              <button className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80">+</button>
+              <button 
+                onClick={() => updatePomodoroSetting("shortBreak", -1)}
+                className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/20 hover:text-primary transition-all active:scale-95"
+              >
+                -
+              </button>
+              <span className="font-display font-bold w-12 text-center text-neon-green">{pomodoroSettings.shortBreak}</span>
+              <button 
+                onClick={() => updatePomodoroSetting("shortBreak", 1)}
+                className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/20 hover:text-primary transition-all active:scale-95"
+              >
+                +
+              </button>
               <span className="text-sm text-muted-foreground">min</span>
             </div>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm">Descanso largo</span>
             <div className="flex items-center gap-2">
-              <button className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80">-</button>
-              <span className="font-display font-bold w-12 text-center">15</span>
-              <button className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80">+</button>
+              <button 
+                onClick={() => updatePomodoroSetting("longBreak", -1)}
+                className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/20 hover:text-primary transition-all active:scale-95"
+              >
+                -
+              </button>
+              <span className="font-display font-bold w-12 text-center text-neon-purple">{pomodoroSettings.longBreak}</span>
+              <button 
+                onClick={() => updatePomodoroSetting("longBreak", 1)}
+                className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary/20 hover:text-primary transition-all active:scale-95"
+              >
+                +
+              </button>
               <span className="text-sm text-muted-foreground">min</span>
             </div>
           </div>
