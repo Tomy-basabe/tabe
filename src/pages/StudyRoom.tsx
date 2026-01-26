@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { useStudyRoom } from "@/hooks/useStudyRoom";
-import { useWebRTC } from "@/hooks/useWebRTC";
+import { useState, useCallback } from "react";
+import { useStudyRoomContext } from "@/contexts/StudyRoomContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { RoomLobby } from "@/components/study-room/RoomLobby";
 import { VideoGrid } from "@/components/study-room/VideoGrid";
@@ -25,41 +24,21 @@ export default function StudyRoom() {
     subjects,
     loading,
     sessionStartTime,
-    createRoom,
-    joinRoom,
-    leaveRoom,
-    updateMyState,
-  } = useStudyRoom();
-
-  const {
-    localStream,
     displayStream,
     remoteStreams,
     isAudioEnabled,
     isVideoEnabled,
     isScreenSharing,
     connectionState,
-    initializeMedia,
-    joinSignalingChannel,
-    leaveSignalingChannel,
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    updateMyState,
     toggleAudio,
     toggleVideo,
     startScreenShare,
     stopScreenShare,
-  } = useWebRTC(currentRoom?.id || null);
-
-  // Initialize media and join signaling when entering a room
-  useEffect(() => {
-    if (currentRoom && !localStream) {
-      const setup = async () => {
-        const stream = await initializeMedia();
-        if (stream) {
-          await joinSignalingChannel(stream);
-        }
-      };
-      setup();
-    }
-  }, [currentRoom, localStream, initializeMedia, joinSignalingChannel]);
+  } = useStudyRoomContext();
 
   // Handle room creation
   const handleCreateRoom = async (name: string, subjectId?: string) => {
@@ -73,7 +52,6 @@ export default function StudyRoom() {
 
   // Handle leaving room
   const handleLeaveRoom = async () => {
-    leaveSignalingChannel();
     await leaveRoom();
   };
 
@@ -84,8 +62,8 @@ export default function StudyRoom() {
   }, [toggleAudio, updateMyState, isAudioEnabled]);
 
   // Handle video toggle
-  const handleToggleVideo = useCallback(() => {
-    toggleVideo();
+  const handleToggleVideo = useCallback(async () => {
+    await toggleVideo();
     updateMyState({ is_camera_off: isVideoEnabled });
   }, [toggleVideo, updateMyState, isVideoEnabled]);
 
