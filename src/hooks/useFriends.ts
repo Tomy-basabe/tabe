@@ -93,13 +93,11 @@ export function useFriends() {
       if (f.addressee_id !== user.id) userIds.add(f.addressee_id);
     });
 
-    // Fetch profiles for these users
+    // Fetch profiles for these users using secure RPC function
     let profiles: Profile[] = [];
     if (userIds.size > 0) {
       const { data: profileData } = await supabase
-        .from("profiles")
-        .select("user_id, username, display_id, nombre, avatar_url")
-        .in("user_id", Array.from(userIds));
+        .rpc('get_friend_profiles', { friend_user_ids: Array.from(userIds) });
       profiles = (profileData as Profile[]) || [];
     }
 

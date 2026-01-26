@@ -908,6 +908,16 @@ export type Database = {
           username: string
         }[]
       }
+      get_friend_profiles: {
+        Args: { friend_user_ids: string[] }
+        Returns: {
+          avatar_url: string
+          display_id: number
+          nombre: string
+          user_id: string
+          username: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
