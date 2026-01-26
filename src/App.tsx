@@ -1,13 +1,12 @@
 import { Toaster } from "@/components/ui/toaster";
 import Forest from "./pages/Forest";
-import StudyRoom from "./pages/StudyRoom";
+import Discord from "./pages/Discord";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { StudyRoomProvider } from "@/contexts/StudyRoomContext";
 import Dashboard from "@/pages/Dashboard";
 import CareerPlan from "@/pages/CareerPlan";
 import Calendar from "@/pages/Calendar";
@@ -98,7 +97,7 @@ const AppRoutes = () => (
       <Route path="/configuracion" element={<Settings />} />
       <Route path="/admin" element={<AdminPanel />} />
       <Route path="/bosque" element={<Forest />} />
-      <Route path="/sala-estudio" element={<StudyRoom />} />
+      <Route path="/discord" element={<Discord />} />
     </Route>
     <Route path="*" element={<NotFound />} />
   </Routes>
@@ -107,15 +106,13 @@ const AppRoutes = () => (
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <StudyRoomProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </TooltipProvider>
-      </StudyRoomProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

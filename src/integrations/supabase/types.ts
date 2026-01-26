@@ -132,6 +132,182 @@ export type Database = {
           },
         ]
       }
+      discord_channels: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+          server_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          server_id: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          server_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discord_channels_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "discord_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discord_messages: {
+        Row: {
+          channel_id: string
+          content: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          content: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discord_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "discord_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discord_server_members: {
+        Row: {
+          id: string
+          joined_at: string
+          role: string
+          server_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          role?: string
+          server_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          role?: string
+          server_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discord_server_members_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "discord_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discord_servers: {
+        Row: {
+          created_at: string
+          icon_url: string | null
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          icon_url?: string | null
+          id?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          icon_url?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      discord_voice_participants: {
+        Row: {
+          channel_id: string
+          id: string
+          is_camera_on: boolean
+          is_deafened: boolean
+          is_muted: boolean
+          is_screen_sharing: boolean
+          is_speaking: boolean
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          id?: string
+          is_camera_on?: boolean
+          is_deafened?: boolean
+          is_muted?: boolean
+          is_screen_sharing?: boolean
+          is_speaking?: boolean
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          id?: string
+          is_camera_on?: boolean
+          is_deafened?: boolean
+          is_muted?: boolean
+          is_screen_sharing?: boolean
+          is_speaking?: boolean
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discord_voice_participants_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "discord_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flashcard_decks: {
         Row: {
           category: string | null
@@ -923,6 +1099,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_server_member: {
+        Args: { server_id: string; user_id: string }
         Returns: boolean
       }
     }

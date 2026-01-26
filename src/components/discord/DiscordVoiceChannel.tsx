@@ -1,0 +1,165 @@
+import { useRef, useEffect } from "react";
+import { cn } from "@/lib/utils";
+import { Mic, MicOff, Video, VideoOff, Monitor, User } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { DiscordChannel, DiscordVoiceParticipant } from "@/hooks/useDiscord";
+
+interface DiscordVoiceChannelProps {
+  channel: DiscordChannel;
+  participants: DiscordVoiceParticipant[];
+  localStream: MediaStream | null;
+  remoteStreams: Map<string, MediaStream>;
+  speakingUsers: Set<string>;
+  isVideoEnabled: boolean;
+  isAudioEnabled: boolean;
+  isScreenSharing: boolean;
+}
+
+export function DiscordVoiceChannel({
+  channel,
+  participants,
+  localStream,
+  remoteStreams,
+  speakingUsers,
+  isVideoEnabled,
+  isAudioEnabled,
+  isScreenSharing,
+}: DiscordVoiceChannelProps) {
+  // Calculate grid layout based on number of participants
+  const totalParticipants = participants.length;
+  
+  const getGridClass = () => {
+    if (totalParticipants <= 1) return "grid-cols-1";
+    if (totalParticipants <= 2) return "grid-cols-2";
+    if (totalParticipants <= 4) return "grid-cols-2";
+    if (totalParticipants <= 6) return "grid-cols-3";
+    if (totalParticipants <= 9) return "grid-cols-3";
+    return "grid-cols-4";
+  };
+
+  return (
+    <div className="flex-1 bg-[#1e1f22] p-4">
+      <div className={cn("grid gap-4 h-full", getGridClass())}>
+        {participants.map((participant) => (
+          <VoiceTile
+            key={participant.id}
+            participant={participant}
+            stream={remoteStreams.get(participant.user_id) || (participant.user_id === participants[0]?.user_id ? localStream : null)}
+            isSpeaking={speakingUsers.has(participant.user_id)}
+            isLocal={participant.user_id === participants[0]?.user_id}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VoiceTile({
+  participant,
+  stream,
+  isSpeaking,
+  isLocal,
+}: {
+  participant: DiscordVoiceParticipant;
+  stream: MediaStream | null;
+  isSpeaking: boolean;
+  isLocal: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  const hasVideo = stream && stream.getVideoTracks().length > 0 && participant.is_camera_on;
+  const displayName = participant.profile?.nombre || participant.profile?.username || "Usuario";
+
+  return (
+    <div
+      className={cn(
+        "relative rounded-lg overflow-hidden bg-[#2b2d31] transition-all duration-200",
+        isSpeaking && "ring-2 ring-[#23a559] ring-offset-2 ring-offset-[#1e1f22]"
+      )}
+    >
+      {hasVideo || participant.is_screen_sharing ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={isLocal}
+          className={cn(
+            "w-full h-full object-cover",
+            isLocal && !participant.is_screen_sharing && "transform scale-x-[-1]"
+          )}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-[#2b2d31]">
+          <Avatar className={cn(
+            "w-24 h-24 transition-all",
+            isSpeaking && "ring-4 ring-[#23a559]"
+          )}>
+            <AvatarImage src={participant.profile?.avatar_url || undefined} />
+            <AvatarFallback className="bg-[#5865f2] text-white text-3xl">
+              {displayName[0].toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        </div>
+      )}
+
+      {/* Overlay with user info */}
+      <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "text-sm font-medium",
+              isSpeaking ? "text-[#23a559]" : "text-white"
+            )}>
+              {isLocal ? "Tú" : displayName}
+            </span>
+            {participant.is_screen_sharing && (
+              <div className="px-1.5 py-0.5 bg-[#23a559] rounded text-[10px] text-white font-medium">
+                COMPARTIENDO
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {participant.is_screen_sharing && (
+              <div className="p-1 rounded bg-[#23a559]">
+                <Monitor className="w-3 h-3 text-white" />
+              </div>
+            )}
+            <div className={cn(
+              "p-1 rounded",
+              participant.is_muted ? "bg-[#ed4245]" : "bg-white/20"
+            )}>
+              {participant.is_muted ? (
+                <MicOff className="w-3 h-3 text-white" />
+              ) : (
+                <Mic className="w-3 h-3 text-white" />
+              )}
+            </div>
+            <div className={cn(
+              "p-1 rounded",
+              !participant.is_camera_on ? "bg-[#ed4245]" : "bg-white/20"
+            )}>
+              {participant.is_camera_on ? (
+                <Video className="w-3 h-3 text-white" />
+              ) : (
+                <VideoOff className="w-3 h-3 text-white" />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Speaking indicator animation */}
+      {isSpeaking && (
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute inset-0 border-2 border-[#23a559] rounded-lg animate-pulse" />
+        </div>
+      )}
+    </div>
+  );
+}

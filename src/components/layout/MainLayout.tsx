@@ -38,7 +38,7 @@ const baseNavItems = [
   { icon: Timer, label: "Pomodoro", path: "/pomodoro" },
   { icon: BarChart3, label: "Métricas", path: "/metricas" },
   { icon: TreeDeciduous, label: "Mi Bosque", path: "/bosque" },
-  { icon: DiscordIcon, label: "Sala de Estudio", path: "/sala-estudio" },
+  { icon: DiscordIcon, label: "Discord", path: "/discord" },
   { icon: Trophy, label: "Logros", path: "/logros" },
   { icon: Users, label: "Amigos", path: "/amigos" },
   { icon: Bot, label: "Asistente IA", path: "/asistente" },
