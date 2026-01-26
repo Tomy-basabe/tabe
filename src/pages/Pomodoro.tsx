@@ -27,11 +27,34 @@ interface PomodoroSettingsType {
   longBreakInterval: number;
 }
 
+const STORAGE_KEY = "pomodoro-settings";
+
 const defaultSettings: PomodoroSettingsType = {
   work: 25,
   shortBreak: 5,
   longBreak: 15,
   longBreakInterval: 4,
+};
+
+const loadSettings = (): PomodoroSettingsType => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return { ...defaultSettings, ...parsed };
+    }
+  } catch {
+    // Fallback to defaults
+  }
+  return defaultSettings;
+};
+
+const saveSettings = (settings: PomodoroSettingsType): void => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // Storage not available
+  }
 };
 
 const modeConfig = {
@@ -61,7 +84,7 @@ const modeConfig = {
 export default function Pomodoro() {
   const { user } = useAuth();
   const { checkAndUnlockAchievements } = useAchievements();
-  const [settings, setSettings] = useState<PomodoroSettingsType>(defaultSettings);
+  const [settings, setSettings] = useState<PomodoroSettingsType>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [mode, setMode] = useState<TimerMode>("work");
   const [timeLeft, setTimeLeft] = useState(defaultSettings.work * 60);
@@ -250,11 +273,11 @@ export default function Pomodoro() {
 
   const handleSettingsChange = (newSettings: PomodoroSettingsType) => {
     setSettings(newSettings);
+    saveSettings(newSettings);
     // Update current timer if not running
     if (!isRunning) {
       setTimeLeft(newSettings[mode] * 60);
     }
-    toast.success("Configuración actualizada");
   };
 
   const playNotificationSound = () => {
