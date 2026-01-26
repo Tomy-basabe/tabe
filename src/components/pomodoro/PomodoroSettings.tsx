@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,12 +24,10 @@ export function PomodoroSettings({
   onClose,
   isRunning,
 }: PomodoroSettingsProps) {
-  const [localSettings, setLocalSettings] = useState(settings);
-
-  const updateSetting = (key: keyof typeof localSettings, delta: number) => {
+  const updateSetting = (key: keyof typeof settings, delta: number) => {
     if (isRunning) return;
     
-    const limits: Record<keyof typeof localSettings, { min: number; max: number }> = {
+    const limits: Record<keyof typeof settings, { min: number; max: number }> = {
       work: { min: 5, max: 60 },
       shortBreak: { min: 1, max: 15 },
       longBreak: { min: 5, max: 30 },
@@ -39,11 +36,10 @@ export function PomodoroSettings({
 
     const newValue = Math.max(
       limits[key].min,
-      Math.min(limits[key].max, localSettings[key] + delta)
+      Math.min(limits[key].max, settings[key] + delta)
     );
 
-    const newSettings = { ...localSettings, [key]: newValue };
-    setLocalSettings(newSettings);
+    const newSettings = { ...settings, [key]: newValue };
     onSettingsChange(newSettings);
   };
 
@@ -71,28 +67,30 @@ export function PomodoroSettings({
             <span className="text-muted-foreground text-sm">{label}</span>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => updateSetting(key, -1)}
                 disabled={isRunning}
                 className={cn(
-                  "w-7 h-7 rounded-lg bg-secondary flex items-center justify-center transition-all",
+                  "w-8 h-8 rounded-lg bg-secondary flex items-center justify-center transition-all",
                   isRunning
                     ? "opacity-50 cursor-not-allowed"
-                    : "hover:bg-secondary/80 hover:scale-105 active:scale-95"
+                    : "hover:bg-primary/20 hover:text-primary hover:scale-105 active:scale-95"
                 )}
               >
                 <Minus className="w-4 h-4" />
               </button>
               <span className={cn("font-display font-bold w-12 text-center", color)}>
-                {localSettings[key]}
+                {settings[key]}
               </span>
               <button
+                type="button"
                 onClick={() => updateSetting(key, 1)}
                 disabled={isRunning}
                 className={cn(
-                  "w-7 h-7 rounded-lg bg-secondary flex items-center justify-center transition-all",
+                  "w-8 h-8 rounded-lg bg-secondary flex items-center justify-center transition-all",
                   isRunning
                     ? "opacity-50 cursor-not-allowed"
-                    : "hover:bg-secondary/80 hover:scale-105 active:scale-95"
+                    : "hover:bg-primary/20 hover:text-primary hover:scale-105 active:scale-95"
                 )}
               >
                 <Plus className="w-4 h-4" />
