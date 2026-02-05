@@ -768,8 +768,9 @@ export function useDiscord() {
 
   // Toggle audio
   const toggleAudio = async () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0];
+   const stream = localStreamRef.current;
+   if (stream) {
+     const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setIsAudioEnabled(audioTrack.enabled);
@@ -782,29 +783,48 @@ export function useDiscord() {
             .eq("user_id", user.id);
         }
       }
+   } else {
+     console.error("[Discord] No local stream for audio toggle");
     }
   };
 
   // Toggle video
   const toggleVideo = async () => {
-    if (!localStream || !user || !currentChannel) return;
+   if (!user || !currentChannel) return;
+   
+   const stream = localStreamRef.current;
+   if (!stream) {
+     console.error("[Discord] No local stream available for video toggle");
+     return;
+   }
     
     if (isVideoEnabled) {
       // Turn off video
-      const videoTrack = localStream.getVideoTracks()[0];
+     const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.stop();
-        localStream.removeTrack(videoTrack);
+       stream.removeTrack(videoTrack);
       }
       setIsVideoEnabled(false);
+     
+     // Update database immediately
+     await supabase
+       .from("discord_voice_participants")
+       .update({ is_camera_on: false })
+       .eq("channel_id", currentChannel.id)
+       .eq("user_id", user.id);
     } else {
       // Turn on video
       try {
+       console.log("[Discord] Requesting video...");
         const videoStream = await navigator.mediaDevices.getUserMedia({
           video: { width: 640, height: 480 },
         });
         const videoTrack = videoStream.getVideoTracks()[0];
-        localStream.addTrack(videoTrack);
+       stream.addTrack(videoTrack);
+       
+       // Update local stream state
+       setLocalStream(stream);
         
         // Update all peer connections
         peerConnections.current.forEach((pc) => {
@@ -812,21 +832,28 @@ export function useDiscord() {
           if (sender) {
             sender.replaceTrack(videoTrack);
           } else {
-            pc.addTrack(videoTrack, localStream);
+           pc.addTrack(videoTrack, stream);
           }
         });
         
         setIsVideoEnabled(true);
+       console.log("[Discord] Video enabled successfully");
+       
+       // Update database
+       await supabase
+         .from("discord_voice_participants")
+         .update({ is_camera_on: true })
+         .eq("channel_id", currentChannel.id)
+         .eq("user_id", user.id);
       } catch (error) {
         console.error("Error enabling video:", error);
+       toast({
+         title: "Error de cámara",
+         description: "No se pudo acceder a la cámara. Verificá los permisos del navegador.",
+         variant: "destructive",
+       });
       }
     }
-    
-    await supabase
-      .from("discord_voice_participants")
-      .update({ is_camera_on: !isVideoEnabled })
-      .eq("channel_id", currentChannel.id)
-      .eq("user_id", user.id);
   };
 
   // Start screen share
