@@ -583,6 +583,7 @@ export function useDiscord() {
     peerConnections.current.forEach((pc) => pc.close());
     peerConnections.current.clear();
     negotiationStateRef.current.clear();
+    videoTransceiversRef.current.clear();
 
     if (signalingChannel.current) {
       await supabase.removeChannel(signalingChannel.current);
@@ -684,6 +685,8 @@ export function useDiscord() {
   };
 
   // WebRTC handlers
+  const videoTransceiversRef = useRef<Map<string, RTCRtpTransceiver>>(new Map());
+
   const createPeerConnection = (peerId: string, stream: MediaStream) => {
     // Check if connection already exists
     const existingPc = peerConnections.current.get(peerId);
@@ -691,32 +694,53 @@ export function useDiscord() {
       console.log("[Discord] Closing existing connection to:", peerId);
       existingPc.close();
       peerConnections.current.delete(peerId);
+      videoTransceiversRef.current.delete(peerId);
     }
-    
+
     console.log("[Discord] Creating peer connection to:", peerId);
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
     // Ensure state exists early
     getNegotiationState(peerId);
-    
-    // Add all local tracks to the peer connection
-    stream.getTracks().forEach(track => {
-      console.log("[Discord] Adding track:", track.kind, "to peer:", peerId);
-      pc.addTrack(track, stream);
-    });
-    
+
+    /*
+      IMPORTANT:
+      Creamos transceivers de audio+video desde el inicio para evitar renegociaciones
+      cuando el usuario activa la cámara más tarde.
+
+      Si solo agregamos `addTrack(video)` después de que la conexión ya esté estable,
+      muchos navegadores requieren un nuevo offer/answer, y el video nunca llega.
+    */
+    const audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+    const videoTransceiver = pc.addTransceiver("video", { direction: "sendrecv" });
+    videoTransceiversRef.current.set(peerId, videoTransceiver);
+
+    // Attach current local tracks
+    const audioTrack = stream.getAudioTracks()[0] ?? null;
+    const videoTrack = stream.getVideoTracks()[0] ?? null;
+
+    if (audioTrack) {
+      console.log("[Discord] Attaching audio track to peer:", peerId);
+      audioTransceiver.sender.replaceTrack(audioTrack);
+    }
+
+    if (videoTrack) {
+      console.log("[Discord] Attaching video track to peer:", peerId);
+      videoTransceiver.sender.replaceTrack(videoTrack);
+    }
+
     pc.ontrack = (event) => {
       console.log("[Discord] Received track from:", peerId, event.track.kind);
       const [remoteStream] = event.streams;
       if (remoteStream) {
-        setRemoteStreams(prev => {
+        setRemoteStreams((prev) => {
           const updated = new Map(prev);
           updated.set(peerId, remoteStream);
           return updated;
         });
       }
     };
-    
+
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannel.current) {
         console.log("[Discord] Sending ICE candidate to:", peerId);
@@ -732,24 +756,25 @@ export function useDiscord() {
         });
       }
     };
-    
+
     pc.onconnectionstatechange = () => {
       console.log("[Discord] Connection state with", peerId, ":", pc.connectionState);
       if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
         // Clean up failed connection
         peerConnections.current.delete(peerId);
-        setRemoteStreams(prev => {
+        videoTransceiversRef.current.delete(peerId);
+        setRemoteStreams((prev) => {
           const updated = new Map(prev);
           updated.delete(peerId);
           return updated;
         });
       }
     };
-    
+
     pc.oniceconnectionstatechange = () => {
       console.log("[Discord] ICE connection state with", peerId, ":", pc.iceConnectionState);
     };
-    
+
     peerConnections.current.set(peerId, pc);
     return pc;
   };
@@ -873,58 +898,69 @@ export function useDiscord() {
     
     if (isVideoEnabled) {
       // Turn off video
-     const videoTrack = stream.getVideoTracks()[0];
+      const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.stop();
-       stream.removeTrack(videoTrack);
+        stream.removeTrack(videoTrack);
       }
+
+      // Remove video from all peer connections without renegotiation
+      peerConnections.current.forEach((pc, peerId) => {
+        const transceiver = videoTransceiversRef.current.get(peerId);
+        const sender = transceiver?.sender ?? pc.getSenders().find((s) => s.track?.kind === "video") ?? null;
+        sender?.replaceTrack(null);
+      });
+
       setIsVideoEnabled(false);
-     
-     // Update database immediately
-     await supabase
-       .from("discord_voice_participants")
-       .update({ is_camera_on: false })
-       .eq("channel_id", currentChannel.id)
-       .eq("user_id", user.id);
+
+      // Update database immediately
+      await supabase
+        .from("discord_voice_participants")
+        .update({ is_camera_on: false })
+        .eq("channel_id", currentChannel.id)
+        .eq("user_id", user.id);
     } else {
       // Turn on video
       try {
-       console.log("[Discord] Requesting video...");
+        console.log("[Discord] Requesting video...");
         const videoStream = await navigator.mediaDevices.getUserMedia({
           video: { width: 640, height: 480 },
         });
         const videoTrack = videoStream.getVideoTracks()[0];
-       stream.addTrack(videoTrack);
-       
-       // Update local stream state
-       setLocalStream(stream);
-        
-        // Update all peer connections
-        peerConnections.current.forEach((pc) => {
-          const sender = pc.getSenders().find(s => s.track?.kind === "video");
+
+        // Add locally so local tile can render
+        stream.addTrack(videoTrack);
+        setLocalStream(stream);
+
+        // Replace on all peer connections using the pre-created video transceiver
+        peerConnections.current.forEach((pc, peerId) => {
+          const transceiver = videoTransceiversRef.current.get(peerId);
+          const sender = transceiver?.sender ?? pc.getSenders().find((s) => s.track?.kind === "video") ?? null;
+
           if (sender) {
             sender.replaceTrack(videoTrack);
           } else {
-           pc.addTrack(videoTrack, stream);
+            // Extremely rare fallback; should not happen due to transceiver creation
+            pc.addTransceiver("video", { direction: "sendrecv" }).sender.replaceTrack(videoTrack);
           }
         });
-        
+
         setIsVideoEnabled(true);
-       console.log("[Discord] Video enabled successfully");
-       
-       // Update database
-       await supabase
-         .from("discord_voice_participants")
-         .update({ is_camera_on: true })
-         .eq("channel_id", currentChannel.id)
-         .eq("user_id", user.id);
+        console.log("[Discord] Video enabled successfully");
+
+        // Update database
+        await supabase
+          .from("discord_voice_participants")
+          .update({ is_camera_on: true })
+          .eq("channel_id", currentChannel.id)
+          .eq("user_id", user.id);
       } catch (error) {
         console.error("Error enabling video:", error);
-       toast({
-         title: "Error de cámara",
-         description: "No se pudo acceder a la cámara. Verificá los permisos del navegador.",
-         variant: "destructive",
-       });
+        toast({
+          title: "Error de cámara",
+          description: "No se pudo acceder a la cámara. Verificá los permisos del navegador.",
+          variant: "destructive",
+        });
       }
     }
   };
